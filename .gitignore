@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.env
+
+# Notebook
+.ipynb_checkpoints/
+
+# Data
+/dataset/
+/guide/
+
+# IDE
+.idea/
+.vscode/
