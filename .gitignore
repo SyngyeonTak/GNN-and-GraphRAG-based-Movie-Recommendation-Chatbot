@@ -15,3 +15,6 @@ guide/
 # IDE
 .idea/
 .vscode/
+
+# virtual env
+syenv/
