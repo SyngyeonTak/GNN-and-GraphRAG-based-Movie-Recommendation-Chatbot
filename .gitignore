@@ -1,6 +1,8 @@
 # Python
 __pycache__/
 *.pyc
+
+# API 키 및 비밀 설정 파일
 .env
 
 # Notebook
@@ -8,7 +10,7 @@ __pycache__/
 
 # Data
 /dataset/
-/guide/
+guide/
 
 # IDE
 .idea/
