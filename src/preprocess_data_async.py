@@ -5,100 +5,128 @@ import os
 import re
 import asyncio
 import aiohttp
-from tqdm.asyncio import tqdm # 비동기용 tqdm
+from tqdm.asyncio import tqdm # tqdm for asyncio
 from pathlib import Path
 from dotenv import load_dotenv
-from urllib.parse import quote # URL 인코딩을 위한 라이브러리
+from urllib.parse import quote # Library for URL encoding
 
-# .env 파일 로드
+# Load .env file
 dotenv_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=dotenv_path)
 
-# TMDB API 키 및 헤더
+# TMDB API Key
 API_KEY = os.environ.get('TMDB_API_KEY')
 
-# 파일 경로 정의
-RAW_DATA_PATH = './dataset/raw/ml-32m/'
+# Define file paths
+RAW_DATA_PATH = './dataset/raw/ml-1m_v2/'
 PROCESSED_DATA_PATH = './dataset/processed/'
 
-# 동시에 보낼 API 요청 수
+# Number of concurrent API requests
 CONCURRENT_REQUESTS = 100 
 
-# --- 비동기 API 호출 함수들 ---
+# --- Asynchronous API Call Functions ---
 
-async def fetch_credits(session, movie_id):
-    """주어진 영화 ID로 배우와 감독 정보를 비동기로 가져옵니다."""
+async def fetch_movie_details(session, movie_id: int):
+    """
+    Given a movie ID, asynchronously fetches its details (overview, director, actors).
+    Uses 'append_to_response' for efficient API calling.
+
+    Args:
+        session (aiohttp.ClientSession): The aiohttp client session.
+        movie_id (int): The ID of the movie to fetch.
+
+    Returns:
+        dict: A dictionary containing the overview, director, and actors.
+              Returns None if the request fails.
+    """
     if not movie_id:
-        return None, None
-    #url = f"https://api.themoviedb.org/3/movie/{movie_id}/credits?language=en-US"
-    url = f"https://api.themoviedb.org/3/movie/{movie_id}/credits?language=en-US&api_key={API_KEY}"
+        return None
+        
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US&append_to_response=credits"
+    
     try:
         async with session.get(url, ssl=False) as response:
             if response.status != 200:
-                return None, None # 요청 실패
+                return None  # Request failed
+            
             data = await response.json()
-            director = next((member['name'] for member in data.get('crew', []) if member.get('job') == 'Director'), None)
-            actors = [member['name'] for member in data.get('cast', [])[:5]]
-            return director, actors
+
+            # 1. Extract overview
+            overview = data.get('overview', None)
+            
+            # 2. Extract director and actors from within the 'credits' object
+            credits_data = data.get('credits', {})
+            director = next((member['name'] for member in credits_data.get('crew', []) if member.get('job') == 'Director'), None)
+            actors = [member['name'] for member in credits_data.get('cast', [])[:5]]
+            
+            # 3. Return as a dictionary
+            return {
+                'overview': overview,
+                'director': director,
+                'actors': actors
+            }
+            
     except Exception:
-        return None, None
+        return None
 
 async def get_movie_data(session, movie_row):
-    """DataFrame의 한 행(영화 정보)을 받아 전체 API 처리 과정을 비동기로 수행합니다."""
-    title_encoded = quote(movie_row['title'])
+    """
+    Takes a DataFrame row (movie info) and performs the entire API process asynchronously.
+    """
+    # Use the cleaned title, as the original might contain the year
+    title_only = re.sub(r'\s*\(\d{4}\)$', '', movie_row['title']).strip()
+    title_encoded = quote(title_only)
     year = movie_row['year']
     
-    # 연도 정보가 없으면 API 요청 없이 None 반환
     if pd.isna(year):
-        return movie_row['movieId'], None, None
+        return movie_row['movieId'], None
 
-    #search_url = f"https://api.themoviedb.org/3/search/movie?query={title_encoded}&year={int(year)}&language=en-US"
-    search_url = f"https://api.themoviedb.org/3/search/movie?query={title_encoded}&year={int(year)}&language=en-US&api_key={API_KEY}"
+    search_url = f"https://api.themoviedb.org/3/search/movie?query={title_encoded}&primary_release_year={int(year)}&language=en-US&api_key={API_KEY}"
+    
     try:
-        # 1. 영화 검색 API 호출
+        # 1. Call the movie search API
         async with session.get(search_url, ssl=False) as response:
             if response.status != 200:
-                return movie_row['movieId'], None, None
+                return movie_row['movieId'], None
             
             data = await response.json()
             results = data.get('results')
             
-            # 2. 검색 결과가 있으면, 첫 번째 결과의 ID로 크레딧 정보 요청
+            # 2. If search results exist, request details for the first result
             if results:
                 movie_id = results[0].get('id')
-                director, actors = await fetch_credits(session, movie_id)
-                return movie_row['movieId'], director, actors
+                details = await fetch_movie_details(session, movie_id)
+                return movie_row['movieId'], details
             else:
-                return movie_row['movieId'], None, None
+                return movie_row['movieId'], None
     except Exception:
-        return movie_row['movieId'], None, None
+        return movie_row['movieId'], None
 
 async def main():
-    """메인 비동기 실행 함수"""
-    print("데이터 전처리를 시작합니다...")
+    """Main asynchronous execution function"""
+    print("Starting data preprocessing...")
     
-    # --- API 키 유효성 검사 ---
+    # --- Validate API Key ---
     if not API_KEY:
-        raise ValueError("TMDB_API_KEY가 .env 파일에 설정되지 않았습니다.")
+        raise ValueError("TMDB_API_KEY is not set in the .env file.")
         
-    # --- 데이터 불러오기 ---
+    # --- Load data ---
     movies_df = pd.read_csv(os.path.join(RAW_DATA_PATH, 'movies.csv'))
     ratings_df = pd.read_csv(os.path.join(RAW_DATA_PATH, 'ratings.csv'))
 
-    # --- movies.csv 기본 전처리 ---
-    print("movies.csv 파일 기본 전처리를 수행합니다...")
+    # --- Basic preprocessing on movies.csv ---
+    print("Performing basic preprocessing on movies.csv...")
     movies_df['year'] = movies_df['title'].str.extract(r'\((\d{4})\)', expand=False)
     movies_df['year'] = pd.to_numeric(movies_df['year'], errors='coerce')
-    movies_df['title'] = movies_df.apply(lambda row: re.sub(r'\s*\(\d{4}\)$', '', row['title']).strip(), axis=1)
     movies_df['genres'] = movies_df['genres'].apply(lambda x: x.split('|'))
     movies_df['genres'] = movies_df['genres'].apply(lambda x: [] if len(x) == 1 and x[0] == '(no genres listed)' else x)
 
-    # --- 중간 저장 및 이어하기 로직 ---
+    # --- Logic for partial save and resume ---
     partial_file_path = os.path.join(PROCESSED_DATA_PATH, 'movies_processed_partial.csv')
     if os.path.exists(partial_file_path):
-        print(f"기존에 작업하던 파일 '{partial_file_path}'을(를) 발견했습니다. 이어서 작업을 시작합니다.")
+        print(f"Found an existing partial file '{partial_file_path}'. Resuming work.")
         processed_df = pd.read_csv(partial_file_path)
-        processed_ids = set(processed_df['movieId'])
+        processed_ids = set(processed_df['movieId'].astype(int))
     else:
         processed_df = pd.DataFrame()
         processed_ids = set()
@@ -106,55 +134,62 @@ async def main():
     to_process_df = movies_df[~movies_df['movieId'].isin(processed_ids)]
 
     if to_process_df.empty:
-        print("모든 영화의 정보 수집이 이미 완료되었습니다.")
+        print("Information collection for all movies is already complete.")
     else:
-        print(f"총 {len(movies_df)}개 영화 중 {len(to_process_df)}개의 영화에 대한 정보 수집을 시작합니다.")
+        print(f"Starting to collect information for {len(to_process_df)} out of {len(movies_df)} movies.")
         
-        # --- 비동기 작업 실행 ---
+        # --- Execute asynchronous tasks ---
         async with aiohttp.ClientSession() as session:
-            # 처리할 영화 목록을 CONCURRENT_REQUESTS 개수만큼의 배치로 나눔
             for i in tqdm(range(0, len(to_process_df), CONCURRENT_REQUESTS), desc="Processing Batches"):
                 batch = to_process_df.iloc[i:i + CONCURRENT_REQUESTS]
                 tasks = [get_movie_data(session, row) for _, row in batch.iterrows()]
                 results = await asyncio.gather(*tasks)
                 
-                # --- 결과 정리 및 저장 ---
+                # --- Organize and save results ---
                 new_data = []
                 for result in results:
                     if result:
-                        movieId, director, actors = result
-                        new_data.append({'movieId': movieId, 'director': director, 'actors': actors})
+                        # Process results according to the new return structure
+                        movieId, details = result
+                        if details:
+                            # Combine movieId and details using dictionary unpacking
+                            new_row = {'movieId': movieId, **details}
+                            new_data.append(new_row)
+                        else:
+                            # If the API lookup failed, record only the movieId to prevent re-attempts
+                            new_data.append({'movieId': movieId, 'overview': None, 'director': None, 'actors': None})
                 
                 if new_data:
                     new_df = pd.DataFrame(new_data)
-                    # 기존 결과와 새로운 결과를 합친 후, partial 파일에 덮어쓰기
                     processed_df = pd.concat([processed_df, new_df], ignore_index=True)
                     processed_df.to_csv(partial_file_path, index=False)
     
-    # --- 최종 데이터 병합 및 저장 ---
-    print("모든 정보 수집 완료. 최종 파일을 생성합니다.")
-    # 원본 데이터에 수집한 director, actors 정보를 movieId 기준으로 병합
-    final_movies_df = pd.merge(movies_df, processed_df, on='movieId', how='left')
+    # --- Final data merging and saving ---
+    print("All information collected. Creating final files.")
+    # Remove year from the title in the original movies_df
+    movies_df['title'] = movies_df['title'].apply(lambda row: re.sub(r'\s*\(\d{4}\)$', '', str(row)).strip())
 
-    # --- ratings.csv 전처리 ---
-    print("ratings.csv 파일 전처리를 시작합니다...")
+    # Merge the collected information (overview, director, actors)
+    final_movies_df = pd.merge(movies_df, processed_df[['movieId', 'overview', 'director', 'actors']], on='movieId', how='left')
+
+    # --- Preprocess ratings.csv ---
+    print("Preprocessing ratings.csv...")
     ratings_df['rated_at'] = pd.to_datetime(ratings_df['timestamp'], unit='s')
     ratings_df = ratings_df.drop('timestamp', axis=1)
     
-    # --- 최종 파일 저장 ---
-    if not os.path.exists(PROCESSED_DATA_PATH):
-        os.makedirs(PROCESSED_DATA_PATH)
+    # --- Save final files ---
+    os.makedirs(PROCESSED_DATA_PATH, exist_ok=True)
         
     final_movies_df.to_csv(os.path.join(PROCESSED_DATA_PATH, 'movies_processed.csv'), index=False)
     ratings_df.to_csv(os.path.join(PROCESSED_DATA_PATH, 'ratings_processed.csv'), index=False)
 
-    print(f"\n모든 데이터 처리가 완료되었으며, '{PROCESSED_DATA_PATH}'에 저장되었습니다.")
-    print("최종 movies 데이터 샘플:")
+    print(f"\nAll data processing is complete and saved to '{PROCESSED_DATA_PATH}'.")
+    print("Final movies data sample:")
     print(final_movies_df.head())
 
 
 if __name__ == "__main__":
-    # Windows에서 asyncio 실행 시 발생할 수 있는 에러 방지
+    # Prevents errors that can occur when running asyncio on Windows
     if os.name == 'nt':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     
