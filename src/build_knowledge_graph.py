@@ -143,9 +143,8 @@ def import_ratings(conn, ratings_df):
 def main():
     """Main execution function."""
     # Load environment variables from .env file
-
-    conn = get_neo4j_connection()
     load_dotenv()
+    conn = get_neo4j_connection()
     
     # Data file paths
     PROCESSED_DATA_PATH = './dataset/processed/'
@@ -163,6 +162,36 @@ def main():
     ratings_df = pd.read_csv(ratings_file)
     print("File loading complete.")
 
+    # --- Filter movies that have both director AND actors ---
+    print("\nFiltering movies to import...")
+    original_movie_count = len(movies_df)
+
+    director_present_condition = movies_df['director'].notna()
+    actors_present_condition = movies_df['actors'].apply(lambda x: isinstance(x, list) and len(x) > 0)
+
+    movies_to_import_df = movies_df[director_present_condition & actors_present_condition]
+    
+    print(f"Original movie count: {original_movie_count}")
+    print(f"Movies to import (with director & actors): {len(movies_to_import_df)}")
+    print(f"Number of movies excluded: {original_movie_count - len(movies_to_import_df)}")
+    
+    # --- NEW: Filter ratings for the remaining movies ---
+    print("\nFiltering ratings for the selected movies...")
+    original_rating_count = len(ratings_df)
+    
+    # Get the list of movieIds that will actually be imported
+    valid_movie_ids = movies_to_import_df['movieId'].unique()
+    
+    # Keep only the ratings that belong to the valid movies
+    ratings_to_import_df = ratings_df[ratings_df['movieId'].isin(valid_movie_ids)]
+    
+    print(f"Original rating count: {original_rating_count}")
+    print(f"Ratings to import (for selected movies): {len(ratings_to_import_df)}")
+    print(f"Number of ratings excluded: {original_rating_count - len(ratings_to_import_df)}\n")
+    # ----------------------------------------------------------------
+
+    print("File loading complete.")
+
 
     # --- Populate the database ---
     # 1. Initialize the database (Warning: deletes all existing data)
@@ -172,10 +201,10 @@ def main():
     create_constraints(conn)
     
     # 3. Import movies and related nodes/relationships
-    import_movies_and_related_nodes(conn, movies_df)
+    import_movies_and_related_nodes(conn, movies_to_import_df)
     
     # 4. Import users and rating relationships
-    import_ratings(conn, ratings_df)
+    import_ratings(conn, ratings_to_import_df)
     
     # Close the connection
     conn.close()
