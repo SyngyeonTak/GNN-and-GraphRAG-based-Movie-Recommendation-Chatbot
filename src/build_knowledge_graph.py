@@ -4,6 +4,7 @@ from neo4j import GraphDatabase
 from dotenv import load_dotenv
 from tqdm import tqdm
 import ast
+from neo4j_utils import get_neo4j_connection 
 
 class Neo4jConnection:
     """Manages the connection to the Neo4j database."""
@@ -80,32 +81,30 @@ def import_movies_and_related_nodes(conn, movies_df):
 
         // 2. Create Genre nodes and relationships
         WITH m
-        UNWIND $genres AS genre_name
+        UNWIND CASE WHEN $genres IS NULL THEN [] ELSE $genres END AS genre_name
         MERGE (g:Genre {name: genre_name})
         MERGE (m)-[:HAS_GENRE]->(g)
 
-        // 3. Create Director node and relationship (Modified)
+        // 3. Create Actor nodes and relationships
+        WITH m
+        UNWIND CASE WHEN $actors IS NULL THEN [] ELSE $actors END AS actor_name
+        MERGE (a:Actor {name: actor_name})
+        SET a:Actor
+        MERGE (a)-[:ACTED_IN]->(m)
+
+        // 4. Create Director node and relationship
         WITH m
         CALL apoc.do.when($director IS NOT NULL,
             // First, MERGE on the Person's name, then SET the Director label.
-            'MERGE (p:Person {name: $director}) SET p:Director MERGE (p)-[:DIRECTED]->(m)',
+            'MERGE (d:Director {name: $director}) SET d:Director MERGE (d)-[:DIRECTED]->(m)',
             '',
-            {m: m, director: $director}) YIELD value
+            {m: m, director: $director}) YIELD value        
 
-        // 4. Create Actor nodes and relationships (Modified)
-        WITH m
-        CALL apoc.do.when($actors IS NOT NULL,
-            // First, MERGE on each Person's name, then SET the Actor label.
-            'UNWIND $actors AS actor_name
-             MERGE (p:Person {name: actor_name})
-             SET p:Actor
-             MERGE (p)-[:ACTED_IN]->(m)',
-            '',
-            {m: m, actors: $actors}) YIELD value
-            
         RETURN count(m)
         """
+
         conn.execute_query(query, parameters=row.to_dict())
+        
     print("Movie-related data import complete.")
 
 def import_ratings(conn, ratings_df):
@@ -144,13 +143,10 @@ def import_ratings(conn, ratings_df):
 def main():
     """Main execution function."""
     # Load environment variables from .env file
+
+    conn = get_neo4j_connection()
     load_dotenv()
     
-    # Neo4j connection details
-    uri = os.environ.get("NEO4J_URI")
-    user = os.environ.get("NEO4J_USER")
-    password = os.environ.get("NEO4J_PASSWORD")
-
     # Data file paths
     PROCESSED_DATA_PATH = './dataset/processed/'
     movies_file = os.path.join(PROCESSED_DATA_PATH, 'movies_processed.csv')
@@ -167,9 +163,7 @@ def main():
     ratings_df = pd.read_csv(ratings_file)
     print("File loading complete.")
 
-    # Establish Neo4j connection
-    conn = Neo4jConnection(uri, user, password)
-    
+
     # --- Populate the database ---
     # 1. Initialize the database (Warning: deletes all existing data)
     clear_database(conn)
