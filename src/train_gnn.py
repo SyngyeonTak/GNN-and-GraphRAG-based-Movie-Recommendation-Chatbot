@@ -30,7 +30,6 @@ BATCH_SIZE = 2048
 NUM_NEIGHBORS = [15, 10] # For 2 layers. e.g., 15 neighbors for the first hop, 10 for the second.
 
 # --- 2. Data Loading & Verification Functions ---
-# (load_data_from_snapshot and verify_graph_data functions remain unchanged)
 def load_data_from_snapshot(snapshot_path='./dataset/graph_snapshot.pkl'):
     """Loads the graph data snapshot from a file."""
     print(f"Loading graph data from snapshot: {snapshot_path}")
@@ -56,17 +55,11 @@ def load_data_from_snapshot(snapshot_path='./dataset/graph_snapshot.pkl'):
     print("Data loading complete.")
     return data, node_names
 
-def verify_graph_data(data, node_names):
-    # This function remains the same. Omitted for brevity.
-    pass
-
 # --- 3. Model & Decoder Definition ---
-# (HGAT and Decoder classes remain unchanged)
 class HGAT(nn.Module):
-    # This class remains the same. Omitted for brevity.
     def __init__(self, data, embedding_dim, hidden_channels, out_channels, num_layers, num_heads):
         super().__init__()
-        self.node_embeds = nn.ModuleDict()
+        self.node_embeds = nn.ModuleDict() # for each type of nodes (e.g. movie, user, ...)
         for node_type in data.node_types:
             self.node_embeds[node_type] = nn.Embedding(data[node_type].num_nodes, embedding_dim)
 
@@ -101,6 +94,7 @@ class HGAT(nn.Module):
 
 
 class Decoder(nn.Module):
+    # it returs the prob(similarity) of link between two nodes based on the final embeddings
     def __init__(self, hidden_channels, num_heads):
         super().__init__()
         self.input_dim = hidden_channels * num_heads
@@ -195,8 +189,7 @@ def main():
         if graph_data[node_type].num_nodes > 0:
             graph_data[node_type].node_id = torch.arange(graph_data[node_type].num_nodes)
     
-    # MODIFIED: RandomLinkSplit no longer creates negative samples itself.
-    transform = RandomLinkSplit(
+    transform = RandomLinkSplit( # for predicting user preference
         num_val=0.1,
         num_test=0.1,
         is_undirected=True,
@@ -208,7 +201,7 @@ def main():
 
     # --- MODIFIED: DataLoaders now handle negative sampling on-the-fly ---
     print("\nCreating mini-batch loaders with on-the-fly negative sampling...")
-    
+    # make subgraphs to train it in mini batches
     train_loader = LinkNeighborLoader(
         data=train_data,
         num_neighbors=NUM_NEIGHBORS,
@@ -236,8 +229,6 @@ def main():
     )
     print("Loaders created.")
 
-    # I've reduced the hyperparameters to be safer for memory.
-    # You can increase them again if your GPU can handle it.
     model = HGAT(graph_data, EMBEDDING_DIM, HIDDEN_CHANNELS, OUT_CHANNELS, NUM_LAYERS, NUM_HEADS).to(device)
     decoder = Decoder(HIDDEN_CHANNELS, NUM_HEADS).to(device)
     optimizer = torch.optim.Adam(list(model.parameters()) + list(decoder.parameters()), lr=LEARNING_RATE)
