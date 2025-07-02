@@ -8,7 +8,7 @@ MAPPING_PATH = "faiss_to_movie_title.json"
 TOP_K = 10  # 몇 개의 유사 영화를 볼지 설정
 
 # 검증해보고 싶은 영화 제목
-TARGET_MOVIE_TITLE = "Forrest Gump"
+TARGET_MOVIE_TITLE = "Toy Story"
 
 # --- 검증 스크립트 ---
 def verify_embeddings():
