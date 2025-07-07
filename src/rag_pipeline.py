@@ -7,6 +7,7 @@ from langchain_community.graphs  import Neo4jGraph  # Use the new, recommended p
 import faiss  
 import json
 import numpy as np
+import pandas as pd
 
 # ==================================================================
 # Function to load ALL recommendation assets
@@ -116,38 +117,45 @@ def get_preference_extractor_chain(llm):
 
     Example 1:
     User's Statement: "I want to watch a thrilling action movie."
-    JSON Output:
-    {
+    JSON Output =
+    {{
         "actors": [],
         "directors": [],
         "genres": ["action"],
         "keywords": ["thrilling"]
-    }
+    }}
 
     Example 2:
     User's Statement: "Show me something with Tom Hanks, maybe a drama."
-    JSON Output:
-    {
+    JSON Output = 
+    {{
         "actors": ["Tom Hanks"],
         "directors": [],
         "genres": ["drama"],
         "keywords": []
-    }
+    }}
 
     Example 3:
     User's Statement: "I don't know, just something fun."
-    JSON Output:
-    {
+    JSON Output = 
+    {{
         "actors": [],
         "directors": [],
         "genres": [],
         "keywords": ["fun"]
-    }
+    }}
 
     User's Statement: "{user_input}"
     JSON Output:
     """
+    # 이 라인이 실제 실행되는지 확인하는 것이 중요합니다.
     extractor_prompt = PromptTemplate(template=extractor_template, input_variables=["user_input"])
+
+    # ==========================================================
+    # 최종 디버깅: 생성된 프롬프트 객체의 input_variables를 직접 출력합니다.
+    print("DEBUG: Final created prompt object's input_variables:", extractor_prompt.input_variables)
+    # ==========================================================
+
     return LLMChain(llm=llm, prompt=extractor_prompt)
 
 # MODIFIED: This function now just asks a question or triggers the Faiss search.
@@ -392,35 +400,49 @@ def main():
     print("🤖 Chatbot is ready. Let's start a conversation!")
     print("="*60)
     
-    # --- MODIFIED Conversational Scenario ---
+    # 3. CSV 파일에서 테스트 케이스 로드
+    try:
+        test_cases_df = pd.read_csv("./dataset/TC/hybrid_test_cases.csv")
+        print(f"✅ Test cases loaded successfully from 'test_cases.csv'. Found {len(test_cases_df)} tests.")
+    except FileNotFoundError:
+        print("❌ CRITICAL ERROR: 'test_cases.csv' not found. Please create the file.")
+        return
+    except Exception as e:
+        print(f"❌ CRITICAL ERROR: Failed to load or read 'test_cases.csv': {e}")
+        return
 
-    # Turn 1: User asks for a general recommendation
-    user_input_1 = "Recommend a movie for me."
-    # MODIFIED: Pass the new chain to the retriever
-    response_1 = hybrid_retriever(user_input_1, llm, graph, query_router_chain, cypher_generation_chain, preference_extractor_chain, conversation_state, rec_assets)
-    print(f"\n👤 You: {user_input_1}")
-    print(f"🤖 Chatbot: {response_1}")
-    # At this point, conversation_state['waiting_for_preference'] is True
-    print(f"Current State: {conversation_state}")
-    
-    print("\n" + "-"*60)
+    # 4. 각 테스트 케이스를 순회하며 실행
+    conversation_state = {}
+    for index, row in test_cases_df.iterrows():
+        test_id = row['TestCase_ID']
+        user_input = str(row['User_Input']) # Ensure input is a string
 
-    # Turn 2: User provides their preferences based on the chatbot's question
-    user_input_2 = "I feel like watching a thrilling action movie starring Tom Cruise."
-    # The retriever will now use the preference_extractor_chain because of the state flag
-    response_2 = hybrid_retriever(user_input_2, llm, graph, query_router_chain, cypher_generation_chain, preference_extractor_chain, conversation_state, rec_assets)
-    print(f"\n👤 You: {user_input_2}")
-    print(f"🤖 Chatbot: {response_2}")
-    # At this point, the state is updated with extracted preferences
-    print(f"Current State: {conversation_state}")
+        # 새로운 시나리오가 시작되면 대화 상태 초기화 (멀티턴 대화는 유지)
+        if not any(cont in test_id for cont in ['-2', '-3', '-4', '-5']):
+            conversation_state = {}
+            print("\n" + "="*60)
+            print("🔄 New Scenario: Conversation state has been reset.")
 
-    print("\n" + "-"*60)
+        print(f"--- Running Test: {test_id} ---")
+        print(f"Objective: {row['Test_Objective']}")
 
-    # Turn 3: User asks a fact-based question (the state is maintained but not used here)
-    user_input_3 = "Who directed the movie Inception?"
-    response_3 = hybrid_retriever(user_input_3, llm, graph, query_router_chain, cypher_generation_chain, preference_extractor_chain, conversation_state, rec_assets)
-    print(f"\n👤 You: {user_input_3}")
-    print(f"🤖 Chatbot: {response_3}")
+        # 하이브리드 리트리버 호출
+        response = hybrid_retriever(
+            user_input,
+            llm,
+            graph,
+            query_router_chain,
+            cypher_generation_chain,
+            preference_extractor_chain,
+            conversation_state,
+            rec_assets
+        )
+
+        # 결과 출력
+        print(f"\n👤 You: {user_input}")
+        print(f"🤖 Chatbot: {response}")
+        print(f"Current State: {conversation_state}")
+        print("-" * 50)
 
     print("\n" + "="*60)
     print("✅ All test scenarios have been executed.")
