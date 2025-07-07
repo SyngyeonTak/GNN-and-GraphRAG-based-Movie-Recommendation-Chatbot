@@ -98,7 +98,60 @@ def find_movies_with_faiss(preferences, llm, faiss_index, idx_to_title, title_to
         
     return recommendations
 
-# This is how you would call it from your main chatbot logic
+# ==================================================================
+# NEW: LLM Chain to extract preferences from user input
+# ==================================================================
+def get_preference_extractor_chain(llm):
+    """
+    Creates a chain that extracts structured preferences (actors, genres, keywords)
+    from a user's free-form text query.
+    """
+    extractor_template = """
+    You are an expert at understanding user preferences for movies.
+    Your task is to extract key entities from the user's statement.
+    Extract actors, directors, genres, and any other descriptive keywords.
+    Respond with ONLY a JSON object containing the extracted information.
+    The keys of the JSON should be "actors", "directors", "genres", and "keywords".
+    If no information is found for a category, provide an empty list [].
+
+    Example 1:
+    User's Statement: "I want to watch a thrilling action movie."
+    JSON Output:
+    {
+        "actors": [],
+        "directors": [],
+        "genres": ["action"],
+        "keywords": ["thrilling"]
+    }
+
+    Example 2:
+    User's Statement: "Show me something with Tom Hanks, maybe a drama."
+    JSON Output:
+    {
+        "actors": ["Tom Hanks"],
+        "directors": [],
+        "genres": ["drama"],
+        "keywords": []
+    }
+
+    Example 3:
+    User's Statement: "I don't know, just something fun."
+    JSON Output:
+    {
+        "actors": [],
+        "directors": [],
+        "genres": [],
+        "keywords": ["fun"]
+    }
+
+    User's Statement: "{user_input}"
+    JSON Output:
+    """
+    extractor_prompt = PromptTemplate(template=extractor_template, input_variables=["user_input"])
+    return LLMChain(llm=llm, prompt=extractor_prompt)
+
+# MODIFIED: This function now just asks a question or triggers the Faiss search.
+# The state management logic is moved to the main retriever.
 def personalized_recommendation(conversation_state, llm, rec_assets):
     """
     Handles personalized recommendation requests using the LLM-Faiss pipeline.
@@ -109,12 +162,71 @@ def personalized_recommendation(conversation_state, llm, rec_assets):
     preferences = conversation_state.get('preferences', [])
 
     if not preferences:
+        # Set a flag to indicate we are waiting for the user's preference
+        conversation_state['waiting_for_preference'] = True
         return "Of course! To give you a good recommendation, could you tell me about a genre, actor, or a movie you've enjoyed recently?"
     else:
         print(f"🧠 Using detected preferences to find recommendations: {preferences}")
+        # Flatten all preference values into a single list for the next step
+        flat_preferences = [item for sublist in preferences.values() for item in sublist]
         return find_movies_with_faiss(
-            preferences, llm, faiss_index, idx_to_title, title_to_idx
+            flat_preferences, llm, faiss_index, idx_to_title, title_to_idx
         )
+
+# ... (기존의 find_movies_with_faiss, clean_cypher_query 등은 그대로 둡니다) ...
+
+# MODIFIED: The main controller now manages the conversation state flow.
+def hybrid_retriever(user_query, llm, graph, router_chain, cypher_chain, preference_extractor_chain, conversation_state, rec_assets):
+    """
+    The main controller that routes the query and manages conversation state,
+    including preference extraction.
+    """
+    print(f"\n--- User Query: '{user_query}' ---")
+    
+    # Check if we are waiting for the user to state their preferences
+    if conversation_state.get('waiting_for_preference'):
+        print("Route: Preference Extraction")
+        # The user's input is expected to be their preference
+        extracted_prefs_str = preference_extractor_chain.invoke({"user_input": user_query})['text']
+        
+        try:
+            # Parse the JSON output from the LLM
+            extracted_prefs = json.loads(extracted_prefs_str)
+            print(f"🧠 Extracted Preferences: {extracted_prefs}")
+            
+            # Update the conversation state with the new preferences
+            # If preferences already exist, you might want to merge them, but here we'll overwrite for simplicity
+            conversation_state['preferences'] = extracted_prefs
+            
+            # We are no longer waiting for a preference
+            conversation_state['waiting_for_preference'] = False
+            
+            # Now, call the personalized recommendation function again with the updated state
+            return personalized_recommendation(conversation_state, llm, rec_assets)
+            
+        except json.JSONDecodeError:
+            conversation_state['waiting_for_preference'] = False
+            return "I had a little trouble understanding that. Could you please try rephrasing your preferences?"
+
+    # If not waiting for a preference, use the standard router
+    route = router_chain.invoke({"user_query": user_query})['text'].strip()
+    
+    if route == "fact_based_search":
+        print("Route: Fact-Based Search")
+        return fact_based_search(user_query, graph, cypher_chain)
+    
+    elif route == "personalized_recommendation":
+        print("Route: Personalized Recommendation")
+        return personalized_recommendation(conversation_state, llm, rec_assets)
+        
+    elif route == "chit_chat":
+        print("Route: Chit-Chat")
+        return chit_chat(user_query)
+    
+    else:
+        response = "I'm sorry, I couldn't understand your request."
+        print(f"Route: Unknown. Response: {response}")
+        return response
 
 def clean_cypher_query(query: str) -> str:
     """
@@ -250,32 +362,6 @@ def chit_chat(user_query):
     print(f"✅ Response: {response}")
     return response
 
-# 2-E. Hybrid Retriever Main Controller
-def hybrid_retriever(user_query, llm, graph, router_chain, cypher_chain, conversation_state, rec_assets):
-    """
-    The main controller that routes the query and manages conversation state.
-    """
-    print(f"\n--- User Query: '{user_query}' ---")
-    
-    route = router_chain.invoke({"user_query": user_query})['text'].strip()
-    
-    if route == "fact_based_search":
-        print("Route: Fact-Based Search")
-        return fact_based_search(user_query, graph, cypher_chain)
-    
-    elif route == "personalized_recommendation":
-        print("Route: Personalized Recommendation")
-        return personalized_recommendation(conversation_state, llm, rec_assets)
-    elif route == "chit_chat":
-        print("Route: Chit-Chat")
-        return chit_chat(user_query)
-    
-    else:
-        response = "I'm sorry, I couldn't understand your request."
-        print(f"Route: Unknown. Response: {response}")
-        return response
-
-
 # ==================================================================
 # 3. Main Execution
 # ==================================================================
@@ -286,55 +372,53 @@ def main():
     print("🚀 Starting Movie Recommendation Chatbot...")
     print("="*60)
     
-    # 1. Setup environment: Load keys, connect to DB, initialize LLM
     llm, graph = setup_environment()
-    
-    # 2. Load recommendation assets: Faiss index and mappings
     rec_assets = load_recommendation_assets()
     
-    # Exit if any setup fails
     if not all([llm, graph, rec_assets]):
         print("\n❌ Exiting program due to setup or asset loading failure.")
         return
         
-    # 3. Initialize all necessary LangChain chains
+    # Initialize all necessary LangChain chains
     query_router_chain = get_query_router_chain(llm)
     cypher_generation_chain = get_cypher_generation_chain(llm)
+    # NEW: Initialize the preference extractor chain
+    preference_extractor_chain = get_preference_extractor_chain(llm)
     
-    # 4. Initialize conversation state
-    # This dictionary will hold the user's preferences throughout the conversation
+    # Initialize conversation state
     conversation_state = {}
     
     print("\n" + "="*60)
     print("🤖 Chatbot is ready. Let's start a conversation!")
     print("="*60)
     
-    # --- Conversational Scenario ---
+    # --- MODIFIED Conversational Scenario ---
 
-    # Turn 1: User asks for a general recommendation (Cold User)
+    # Turn 1: User asks for a general recommendation
     user_input_1 = "Recommend a movie for me."
-    response_1 = hybrid_retriever(user_input_1, llm, graph, query_router_chain, cypher_generation_chain, conversation_state, rec_assets)
+    # MODIFIED: Pass the new chain to the retriever
+    response_1 = hybrid_retriever(user_input_1, llm, graph, query_router_chain, cypher_generation_chain, preference_extractor_chain, conversation_state, rec_assets)
     print(f"\n👤 You: {user_input_1}")
     print(f"🤖 Chatbot: {response_1}")
+    # At this point, conversation_state['waiting_for_preference'] is True
+    print(f"Current State: {conversation_state}")
     
     print("\n" + "-"*60)
 
     # Turn 2: User provides their preferences based on the chatbot's question
-    # In a real app, this would come from the user. We'll simulate it here.
-    # A real implementation would have another LLM chain to extract these entities.
-    print("(Simulating user's response: 'I feel like watching a thrilling action movie.')")
-    conversation_state['preferences'] = ['thrilling action']
-    
-    user_input_2 = "Based on that, what do you suggest?"
-    response_2 = hybrid_retriever(user_input_2, llm, graph, query_router_chain, cypher_generation_chain, conversation_state, rec_assets)
+    user_input_2 = "I feel like watching a thrilling action movie starring Tom Cruise."
+    # The retriever will now use the preference_extractor_chain because of the state flag
+    response_2 = hybrid_retriever(user_input_2, llm, graph, query_router_chain, cypher_generation_chain, preference_extractor_chain, conversation_state, rec_assets)
     print(f"\n👤 You: {user_input_2}")
     print(f"🤖 Chatbot: {response_2}")
-    
+    # At this point, the state is updated with extracted preferences
+    print(f"Current State: {conversation_state}")
+
     print("\n" + "-"*60)
 
-    # Turn 3: User asks a fact-based question
+    # Turn 3: User asks a fact-based question (the state is maintained but not used here)
     user_input_3 = "Who directed the movie Inception?"
-    response_3 = hybrid_retriever(user_input_3, llm, graph, query_router_chain, cypher_generation_chain, conversation_state, rec_assets)
+    response_3 = hybrid_retriever(user_input_3, llm, graph, query_router_chain, cypher_generation_chain, preference_extractor_chain, conversation_state, rec_assets)
     print(f"\n👤 You: {user_input_3}")
     print(f"🤖 Chatbot: {response_3}")
 
