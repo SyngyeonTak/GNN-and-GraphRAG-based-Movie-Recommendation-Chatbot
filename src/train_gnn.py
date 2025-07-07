@@ -28,6 +28,7 @@ BATCH_SIZE = 2048
 # Define the number of neighbors to sample for each layer. -1 means all neighbors.
 # Using a fixed number limits the computation per node.
 NUM_NEIGHBORS = [15, 10] # For 2 layers. e.g., 15 neighbors for the first hop, 10 for the second.
+NODE_TYPES_TO_EMBED = ['movie', 'genre', 'actor', 'director']
 
 # --- 2. Data Loading & Verification Functions ---
 def load_data_from_snapshot(snapshot_path='./dataset/graph_snapshot.pkl'):
@@ -57,7 +58,7 @@ def load_data_from_snapshot(snapshot_path='./dataset/graph_snapshot.pkl'):
 
 # --- 3. Model & Decoder Definition ---
 class HGAT(nn.Module):
-    def __init__(self, data, embedding_dim, hidden_channels, out_channels, num_layers, num_heads):
+    def __init__(self, data, embedding_dim, hidden_channels, out_channels, num_layers, num_heads, node_types_to_embed):
         super().__init__()
         self.node_embeds = nn.ModuleDict() # for each type of nodes (e.g. movie, user, ...)
         for node_type in data.node_types:
@@ -77,6 +78,11 @@ class HGAT(nn.Module):
             }, aggr='sum'))
         self.lin = nn.Linear(hidden_channels * num_heads, out_channels)
 
+        # NEW: Create a final linear layer for each node type we want to export
+        self.output_lins = nn.ModuleDict()
+        for node_type in node_types_to_embed:
+            self.output_lins[node_type] = nn.Linear(hidden_channels * num_heads, out_channels)
+
     def forward(self, data):
         # NOTE: When using NeighborLoader, the input 'data' is a batch (subgraph).
         # The model needs to receive the full node feature set (`x_dict`) to work on.
@@ -90,7 +96,15 @@ class HGAT(nn.Module):
         for conv in self.convs:
             x_dict = conv(x_dict, data.edge_index_dict)
             x_dict = {key: F.leaky_relu(x) for key, x in x_dict.items()}
-        return self.lin(x_dict['movie']), x_dict
+
+        # CHANGED: Apply the final linear layer to each specified node type
+        final_embeddings = {}
+        for node_type, lin_layer in self.output_lins.items():
+            if node_type in x_dict:
+                final_embeddings[node_type] = lin_layer(x_dict[node_type])
+
+        #return self.lin(x_dict['movie']), x_dict
+        return final_embeddings, x_dict
 
 
 class Decoder(nn.Module):
@@ -109,8 +123,9 @@ def train(model, decoder, batch, optimizer):
     model.train(); decoder.train()
     optimizer.zero_grad()
     
+    # The model now returns final_embeddings, z_dict. We only need z_dict for the decoder.
     _, z_dict = model(batch)
-    
+
     # Get predictions for all edges (positive and negative) in the batch
     out = decoder(z_dict, batch['user', 'rated', 'movie'].edge_label_index)
     
@@ -146,36 +161,53 @@ def test(model, decoder, loader, device):
     return roc_auc_score(final_ground_truths, final_preds)
 
 # --- NEW: Function to generate and save embeddings with FAISS ---
-def generate_and_save_embeddings(model, data, node_names):
+def generate_and_save_embeddings(model, data, node_names, node_types_to_save):
     """Generates final movie embeddings and saves them using FAISS."""
     print("\n--- Generating and Saving Final Embeddings ---")
     model.eval()
     with torch.no_grad():
         # Get final movie embeddings from the trained model
-        movie_embeddings, _ = model(data)
+        #movie_embeddings, _ = model(data)
+        final_embeddings_dict, _ = model(data)
         
-        # Move embeddings to CPU and convert to NumPy array
-        movie_embeddings_np = movie_embeddings.cpu().detach().numpy()
+        for node_type in node_types_to_save:
+            if node_type not in final_embeddings_dict:
+                print(f"Warning: Node type '{node_type}' not found in model output. Skipping.")
+                continue
+            
+            # Move embeddings to CPU and convert to NumPy array
+            print(f"\nProcessing embeddings for node type: '{node_type}'")
+            embeddings = final_embeddings_dict[node_type]
+            embeddings_np = embeddings.cpu().detach().numpy()
 
-        # 1. Build the FAISS index
-        print(f"Building FAISS index for {movie_embeddings_np.shape[0]} movies with dimension {OUT_CHANNELS}...")
-        index = faiss.IndexFlatL2(OUT_CHANNELS)
-        index.add(movie_embeddings_np)
-        
-        # 2. Save the FAISS index to a file
-        faiss_index_path = "movie_embeddings.faiss"
-        faiss.write_index(index, faiss_index_path)
-        print(f"FAISS index saved to: {faiss_index_path}")
+            # 1. Build the FAISS index
+            #print(f"Building FAISS index for {movie_embeddings_np.shape[0]} movies with dimension {OUT_CHANNELS}...")
+            print(f"Building FAISS index for {embeddings_np.shape[0]} '{node_type}' nodes with dimension {OUT_CHANNELS}...")
+            index = faiss.IndexFlatL2(OUT_CHANNELS)
+            #index.add(movie_embeddings_np)
+            index.add(embeddings_np.astype('float32')) # FAISS expects float32
+            
+            # 2. Save the FAISS index to a file
+            faiss_index_path = f"{node_type}_embeddings.faiss"
+            faiss.write_index(index, faiss_index_path)
+            print(f"FAISS index saved to: {faiss_index_path}")
 
-        # 3. Create and save the mapping from FAISS index to movie title
-        movie_titles = node_names['Movie']
-        # The PyG data loader preserves the order, so the i-th embedding corresponds to the i-th movie title
-        idx_to_title = {i: title for i, title in enumerate(movie_titles)}
-        
-        mapping_path = "faiss_to_movie_title.json"
-        with open(mapping_path, 'w', encoding='utf-8') as f:
-            json.dump(idx_to_title, f, ensure_ascii=False, indent=4)
-        print(f"Index-to-title mapping saved to: {mapping_path}")
+            # 3. Create and save the mapping from FAISS index to movie title
+            
+            node_type_capitalized = node_type.capitalize()
+            if node_type_capitalized not in node_names:
+                print(f"Warning: Could not find names for '{node_type_capitalized}' in node_names dict. Skipping mapping file.")
+                continue
+
+            titles = node_names[node_type_capitalized]
+
+            # The PyG data loader preserves the order, so the i-th embedding corresponds to the i-th movie title
+            idx_to_name = {i: title for i, title in enumerate(titles)}
+            
+            mapping_path = f"{node_type}_mapping.json"
+            with open(mapping_path, 'w', encoding='utf-8') as f:
+                json.dump(idx_to_name, f, ensure_ascii=False, indent=4)
+            print(f"Index-to-name mapping saved to: {mapping_path}")
 
 # --- 5. Main Execution Block ---
 def main():
@@ -229,7 +261,8 @@ def main():
     )
     print("Loaders created.")
 
-    model = HGAT(graph_data, EMBEDDING_DIM, HIDDEN_CHANNELS, OUT_CHANNELS, NUM_LAYERS, NUM_HEADS).to(device)
+
+    model = HGAT(graph_data, EMBEDDING_DIM, HIDDEN_CHANNELS, OUT_CHANNELS, NUM_LAYERS, NUM_HEADS, NODE_TYPES_TO_EMBED).to(device)
     decoder = Decoder(HIDDEN_CHANNELS, NUM_HEADS).to(device)
     optimizer = torch.optim.Adam(list(model.parameters()) + list(decoder.parameters()), lr=LEARNING_RATE)
     
@@ -252,7 +285,7 @@ def main():
     test_auc = test(model, decoder, test_loader, device)
     print(f"Final Test AUC: {test_auc:.4f}")
 
-    generate_and_save_embeddings(model, graph_data.to(device), node_names)
+    generate_and_save_embeddings(model, graph_data.to(device), node_names, NODE_TYPES_TO_EMBED)
 
 
 if __name__ == "__main__":
