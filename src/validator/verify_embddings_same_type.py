@@ -8,15 +8,15 @@ VERIFICATION_TARGETS = {
     "movie": "Toy Story",
     "actor": "Tom Hanks",
     "director": "Steven Spielberg",
-    "genre": "Action"
+    "genre": "Crime"
 }
 TOP_K = 10  # 몇 개의 유사 항목을 볼지 설정
 
 def verify_single_embedding(node_type, target_name):
     """지정된 노드 타입의 임베딩 파일과 매핑 파일을 검증합니다."""
     
-    faiss_index_path = f"{node_type}_embeddings.faiss"
-    mapping_path = f"{node_type}_mapping.json"
+    faiss_index_path = f"./dataset/faiss/{node_type}_embeddings.faiss"
+    mapping_path = f"./dataset/faiss/{node_type}_mapping.json"
     
     print(f"\n{'='*60}")
     print(f"🔬 Verifying Embeddings for Node Type: '{node_type.upper()}'")
