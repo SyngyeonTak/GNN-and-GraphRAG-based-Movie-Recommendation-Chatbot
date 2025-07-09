@@ -30,6 +30,8 @@ BATCH_SIZE = 2048
 NUM_NEIGHBORS = [15, 10] # For 2 layers. e.g., 15 neighbors for the first hop, 10 for the second.
 NODE_TYPES_TO_EMBED = ['movie', 'genre', 'actor', 'director']
 
+DUMP_PATH = './faiss/'
+
 # --- 2. Data Loading & Verification Functions ---
 def load_data_from_snapshot(snapshot_path='./dataset/graph_snapshot.pkl'):
     """Loads the graph data snapshot from a file."""
@@ -79,9 +81,13 @@ class HGAT(nn.Module):
         self.lin = nn.Linear(hidden_channels * num_heads, out_channels)
 
         # NEW: Create a final linear layer for each node type we want to export
-        self.output_lins = nn.ModuleDict()
-        for node_type in node_types_to_embed:
-            self.output_lins[node_type] = nn.Linear(hidden_channels * num_heads, out_channels)
+        #self.output_lins = nn.ModuleDict()
+        #for node_type in node_types_to_embed:
+        #    self.output_lins[node_type] = nn.Linear(hidden_channels * num_heads, out_channels)
+
+        # Modification: To embed different node types in the same space
+        self.shared_output_lin = nn.Linear(hidden_channels * num_heads, out_channels)
+        self.node_types_to_embed = node_types_to_embed
 
     def forward(self, data):
         # NOTE: When using NeighborLoader, the input 'data' is a batch (subgraph).
@@ -99,9 +105,15 @@ class HGAT(nn.Module):
 
         # CHANGED: Apply the final linear layer to each specified node type
         final_embeddings = {}
-        for node_type, lin_layer in self.output_lins.items():
+        #for node_type, lin_layer in self.output_lins.items():
+        #    if node_type in x_dict:
+        #        final_embeddings[node_type] = lin_layer(x_dict[node_type])
+
+        # Modification: To embed different node types in the same space
+        for node_type in self.node_types_to_embed:
             if node_type in x_dict:
-                final_embeddings[node_type] = lin_layer(x_dict[node_type])
+                # 각 타입의 GNN 출력에 대해 '동일한' 선형 레이어를 적용
+                final_embeddings[node_type] = self.shared_output_lin(x_dict[node_type])
 
         #return self.lin(x_dict['movie']), x_dict
         return final_embeddings, x_dict
@@ -188,7 +200,7 @@ def generate_and_save_embeddings(model, data, node_names, node_types_to_save):
             index.add(embeddings_np.astype('float32')) # FAISS expects float32
             
             # 2. Save the FAISS index to a file
-            faiss_index_path = f"{node_type}_embeddings.faiss"
+            faiss_index_path = f"{DUMP_PATH}{node_type}_embeddings.faiss"
             faiss.write_index(index, faiss_index_path)
             print(f"FAISS index saved to: {faiss_index_path}")
 
@@ -204,7 +216,7 @@ def generate_and_save_embeddings(model, data, node_names, node_types_to_save):
             # The PyG data loader preserves the order, so the i-th embedding corresponds to the i-th movie title
             idx_to_name = {i: title for i, title in enumerate(titles)}
             
-            mapping_path = f"{node_type}_mapping.json"
+            mapping_path = f"{DUMP_PATH}{node_type}_mapping.json"
             with open(mapping_path, 'w', encoding='utf-8') as f:
                 json.dump(idx_to_name, f, ensure_ascii=False, indent=4)
             print(f"Index-to-name mapping saved to: {mapping_path}")

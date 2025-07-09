@@ -8,7 +8,7 @@ CROSS_VERIFICATION_TARGETS = [
     #{"source_type": "movie", "source_name": "Toy Story", "target_type": "actor"},
     #{"source_type": "actor", "source_name": "Tom Hanks", "target_type": "movie"},
     #{"source_type": "director", "source_name": "Steven Spielberg", "target_type": "genre"},
-    {"source_type": "director", "source_name": "Steven Spielberg", "target_type": "movie"}
+    {"source_type": "director", "source_name": "Steven Spielberg", "target_type": "genre"}
 ]
 TOP_K = 10  # 몇 개의 유사 항목을 볼지 설정
 
