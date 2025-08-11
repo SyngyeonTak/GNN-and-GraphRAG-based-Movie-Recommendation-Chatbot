@@ -6,19 +6,32 @@ from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
 from langchain_community.graphs import Neo4jGraph
-
+import pickle
+import networkx as nx
 # 분리된 파일에서 함수 임포트
 
 from chains import (
     get_query_router_chain,
     get_cypher_generation_chain,
+    get_subgraph_cypher_chain,
     get_preference_extractor_chain,
     get_entity_extractor_chain,
     get_movie_suggester_chain,
-    get_genre_mapper_chain
+    get_genre_mapper_chain,    
+    get_personalized_response_chain,
 )
 
-from retriever import *
+from utils import (
+    load_recommendation_assets,
+)
+
+from graph_utils import (
+    create_global_nx_graph,
+)
+
+from retriever import (
+    hybrid_retriever
+)
 
 # ==================================================================
 # 1. Environment Setup
@@ -60,53 +73,46 @@ def main():
     print("="*60)
     
     llm, graph = setup_environment()
+
+    with open('./dataset/graph_snapshot.pkl', 'rb') as f:
+        snapshot_data = pickle.load(f)
+
+    # 전체 그래프를 미리 생성하여 메모리에 보관
+    global_graph_nx = create_global_nx_graph(snapshot_data)
     rec_assets = load_recommendation_assets()
     
     if not all([llm, graph, rec_assets]):
         print("\n❌ Exiting program due to setup or asset loading failure.")
         return
-        
-    if not all([llm, graph, rec_assets]):
-        print("\n❌ Exiting due to setup failure.")
-        return
-        
+    
     chains = {
         'router': get_query_router_chain(llm),
         'cypher_gen': get_cypher_generation_chain(llm),
+        'subgraph_gen': get_subgraph_cypher_chain(llm),
         'preference_extractor': get_preference_extractor_chain(llm),
         'entity_extractor': get_entity_extractor_chain(llm),
         'movie_suggester': get_movie_suggester_chain(llm),
         'genre_mapper': get_genre_mapper_chain(llm),
+        'personalized_responder': get_personalized_response_chain(llm),
     }
     
-    # Initialize conversation state
+    
     conversation_state = {}
     
     print("\n" + "="*60)
     print("🤖 Chatbot is ready. Let's start a conversation!")
     print("="*60)
     
-    # 3. CSV 파일에서 테스트 케이스 로드
-    try:
-        test_cases_df = pd.read_csv("./dataset/TC/hybrid_test_cases.csv")
-        print(f"✅ Test cases loaded successfully from 'test_cases.csv'. Found {len(test_cases_df)} tests.")
-    except FileNotFoundError:
-        print("❌ CRITICAL ERROR: 'test_cases.csv' not found. Please create the file.")
-        return
-    except Exception as e:
-        print(f"❌ CRITICAL ERROR: Failed to load or read 'test_cases.csv': {e}")
-        return
+
+    test_cases_df = pd.read_csv("./dataset/TC/hybrid_test_cases.csv")
+    print(f"✅ Test cases loaded successfully from 'test_cases.csv'. Found {len(test_cases_df)} tests.")
 
     # 4. 각 테스트 케이스를 순회하며 실행
     conversation_state = {}
     for index, row in test_cases_df.iterrows():
         test_id = row['TestCase_ID']
 
-        #if test_id not in ['R-06', 'R-09', 'P-01-2', 'P-02-2', 'P-03-2']:
-        if test_id not in ['P-01-2']:
-            continue
-
-        user_input = str(row['User_Input']) # Ensure input is a string
+        user_input = str(row['User_Input'])
 
         # 새로운 시나리오가 시작되면 대화 상태 초기화 (멀티턴 대화는 유지)
         if not any(cont in test_id for cont in ['-2', '-3', '-4', '-5']):
@@ -120,11 +126,11 @@ def main():
         # 하이브리드 리트리버 호출
         response = hybrid_retriever(
             user_query = user_input,
-            llm = llm,
             graph = graph,
             chains = chains,
             state = conversation_state,
-            assets = rec_assets
+            assets = rec_assets,
+            global_graph_nx = global_graph_nx
         )
 
         # 결과 출력

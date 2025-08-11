@@ -26,17 +26,19 @@ def get_movie_suggester_chain(llm):
     return LLMChain(llm=llm, prompt=suggester_prompt)
 
 def get_preference_extractor_chain(llm):
-    """
-    Creates a chain that extracts structured preferences (actors, genres, keywords)
-    from a user's free-form text query.
-    """
     extractor_template = """
     You are an expert at understanding user preferences for movies.
     Your task is to extract key entities from the user's statement.
-    Extract actors, directors, genres, and any other descriptive keywords.
+
+    First, if there are any spelling or name mistakes in the statement (like 'Tam Honks' instead of 'Tom Hanks'),
+    correct them silently and proceed as if the correct version was provided.
+
+    Then, extract actors, directors, genres and movies.
+
     Respond with ONLY a JSON object containing the extracted information.
     If no information is found for a category, provide an empty list [].
-    The keys of the JSON should be "actors", "directors", "genres", and "keywords".
+    The keys of the JSON should be "actors", "directors", "genres" and "movies".
+
 
     Example 1:
     User's Statement: "I want to watch a thrilling action movie."
@@ -45,7 +47,7 @@ def get_preference_extractor_chain(llm):
         "actors": [],
         "directors": [],
         "genres": ["action"],
-        "keywords": ["thrilling"]
+        "movies": []
     }}
 
     Example 2:
@@ -55,7 +57,7 @@ def get_preference_extractor_chain(llm):
         "actors": ["Tom Hanks"],
         "directors": [],
         "genres": ["drama"],
-        "keywords": []
+        "movies": []
     }}
 
     Example 3:
@@ -64,8 +66,18 @@ def get_preference_extractor_chain(llm):
     {{
         "actors": [],
         "directors": [],
+        "genres": ["fun"],
+        "movies": []
+    }}
+
+    Example 4:
+    User's Statement: "I like movies like Toy Story"
+    JSON Output = 
+    {{
+        "actors": [],
+        "directors": [],
         "genres": [],
-        "keywords": ["fun"]
+        "movies": ["Toy Story"]
     }}
 
     User's Statement: "{user_input}"
@@ -122,3 +134,74 @@ def get_cypher_generation_chain(llm):
     """
     cypher_prompt = PromptTemplate(template=cypher_generation_template, input_variables=["schema", "question"])
     return LLMChain(llm=llm, prompt=cypher_prompt, verbose=False)
+
+def get_subgraph_cypher_chain(llm):
+    """
+    [V2] 서브그래프 추출을 위해 '방향이 없는' 쿼리를 생성하도록
+    명확하게 지시하는 프롬프트를 사용하는 체인
+    """
+    subgraph_cypher_template = """
+    Task: Generate a read-only Cypher query to retrieve a subgraph from a Neo4j database.
+    
+    Instructions:
+    1. You will be given a list of movie IDs.
+    2. First, find all movies with these IDs using a 'MATCH (m:Movie) WHERE m.movieId IN [...]' clause.
+    3. Then, find all nodes directly connected to these movies.
+    4. **CRUCIAL**: To retrieve all connected nodes regardless of the relationship direction, you MUST use the undirected pattern `(m)-[r]-(n)`. Do NOT use directed patterns like `(m)->(n)` or `(m)<-(n)`.
+    5. The query should return the matched movies, the connecting relationships, and the connected neighboring nodes. Use the pattern `RETURN m, r, n`.
+    
+    Schema:
+    {schema}
+    
+    List of Movie IDs:
+    {movie_ids}
+    
+    Respond with ONLY the Cypher query.
+    Cypher Query:
+    """
+    
+    subgraph_cypher_prompt = PromptTemplate(
+        template=subgraph_cypher_template,
+        input_variables=["schema", "movie_ids"]
+    )
+    
+    return LLMChain(llm=llm, prompt=subgraph_cypher_prompt, verbose=False)
+
+def get_personalized_response_chain(llm):
+    """
+    GNN 리랭킹 결과와 사용자 쿼리/선호도를 바탕으로,
+    최종 추천 답변을 생성하는 LLMChain을 반환합니다.
+    """
+    final_response_template = """
+    You are a helpful and knowledgeable movie recommendation expert.
+    Your task is to perform a final re-ranking of candidate movies and generate a natural, compelling response to the user.
+
+    Here is the context:
+    1. User's Original Query: This is what the user initially asked. Pay attention to the nuance and tone.
+    2. Extracted Preferences: Key entities extracted from the user's query.
+    3. Candidate Movies: A list of movies pre-ranked by a graph-based AI (GNN). The GNN score reflects structural importance in the knowledge graph.
+
+    Your step-by-step instructions:
+    Step 1: Deeply understand the user's taste by analyzing the "User's Original Query" and "Extracted Preferences". Look for themes, genres, moods, and key entities.
+    Step 2: For each movie in "Candidate Movies", read its overview. Re-rank the candidates based on how well their overview semantically matches the user's taste you identified in Step 1. Use the GNN importance score as a secondary factor or a tie-breaker.
+    Step 3: Select the top 2-3 best movies from your new ranking.
+    Step 4: Craft a friendly and persuasive response. For each recommended movie, briefly explain *why* you are recommending it, connecting its overview to the user's query. Present the results in a clear and appealing format.
+
+    --- CONTEXT ---
+    User's Original Query: {user_query}
+    Extracted Preferences: {preferences_str}
+    Candidate Movies (pre-ranked by GNN): 
+    {candidates_str}
+    --- END OF CONTEXT ---
+
+    Respond with ONLY the final, natural language response to be shown to the user.
+
+    Final Recommendation:
+    """
+    
+    prompt = PromptTemplate(
+        template=final_response_template,
+        input_variables=["user_query", "preferences_str", "candidates_str"]
+    )
+    
+    return LLMChain(llm=llm, prompt=prompt)
