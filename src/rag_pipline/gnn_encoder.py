@@ -58,3 +58,4 @@ def rank_movies_by_attention(
     # 중요도 순으로 정렬
     sorted_movies = sorted(results, key=lambda x: x['importance'], reverse=True)
     return sorted_movies
+

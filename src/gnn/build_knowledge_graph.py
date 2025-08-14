@@ -148,8 +148,8 @@ def main():
     
     # Data file paths
     PROCESSED_DATA_PATH = './dataset/processed/'
-    movies_file = os.path.join(PROCESSED_DATA_PATH, 'movies_processed.csv')
-    ratings_file = os.path.join(PROCESSED_DATA_PATH, 'ratings_processed.csv')
+    movies_file = os.path.join(PROCESSED_DATA_PATH, 'movies_processed_w_id.csv')
+    ratings_file = os.path.join(PROCESSED_DATA_PATH, 'ratings_processed_w_id.csv')
 
     # Load data from CSV files
     print("Loading processed CSV files...")

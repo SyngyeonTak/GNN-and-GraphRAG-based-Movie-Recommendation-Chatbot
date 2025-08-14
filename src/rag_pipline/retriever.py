@@ -2,7 +2,8 @@ from utils import (
             find_best_match, 
             clean_cypher_query, 
             find_movies_with_faiss,
-            format_candidates_for_prompt
+            format_candidates_for_prompt,
+            find_best_name
         )
 import json
 
@@ -17,7 +18,12 @@ def personalized_recommendation(user_query, state, graph, assets, chains, global
 
     if not any(preferences.values()):
         state['waiting_for_preference'] = True
-        return "Of course! To give you a good recommendation, could you tell me about a genre, actor, or a movie you've enjoyed recently?"
+        personalized_guide_chain = chains['personalized_guide']
+        return personalized_guide_chain.run(
+            user_query=user_query,
+            preferences=preferences,
+            schema=graph.schema
+        )
     else:
         print(f"🧠 Using preferences to find recommendations: {preferences}")
         rerank_dict = find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx)
@@ -33,41 +39,93 @@ def personalized_recommendation(user_query, state, graph, assets, chains, global
         }
         return personalized_response_chain.invoke(inputs)['text']
 
-def fact_based_search(query, graph, assets, chains):
-    """사실 기반 검색을 수행 (엔티티 추출 -> Fuzzy Matching -> Cypher 실행)"""
-    print("\n[Executing Fact-Based Search]")
-    extracted_entity = chains['entity_extractor'].invoke({"user_input": query})['text'].strip()
-    if not extracted_entity:
-        return "I'm sorry, I couldn't identify a movie or person in your question."
+def fact_based_search(query: str, graph, assets: dict, chains: dict):
+    """
+    [V5] Corrects entities, replaces them in original query,
+    and generates/executes Cypher using both original context and corrected entity names.
+    """
+    import json
+    print("\n[Executing Consolidated Fact-Based Search]")
+    
+    # --- 1. Extract structured entities (JSON format) ---
+    extractor_chain = chains['entity_extractor']
+    entity_json_str = extractor_chain.invoke({"user_input": query})['text']
+    try:
+        extracted_entities = json.loads(entity_json_str)
+    except json.JSONDecodeError:
+        return "Sorry, I had trouble understanding your question. Could you please rephrase it?"
 
-    all_known_names = list(assets["movie"]["mapping"].keys()) + \
-                      list(assets["actor"]["mapping"].keys()) + \
-                      list(assets["director"]["mapping"].keys())
-    
-    corrected_entity = find_best_match(extracted_entity, all_known_names)
-    if not corrected_entity:
-        return f"I'm sorry, I couldn't find anything matching '{extracted_entity}'."
-    print(f"✅ Corrected Entity: '{corrected_entity}'")
-    
-    clean_query = query.lower().replace(extracted_entity.lower(), corrected_entity)
-    generated_cypher = chains['cypher_gen'].invoke({"schema": graph.schema, "question": clean_query})['text']
-    cleaned_cypher = clean_cypher_query(generated_cypher)
+    if not any(extracted_entities.values()):
+        return "I'm sorry, but I couldn't find any movie or person information in your question."
+    print(f"✅ Extracted Entities: {extracted_entities}")
+
+    # --- 2. Perform Fuzzy Matching ---
+    corrected_entities = {}
+    for entity_type, names in extracted_entities.items():
+        if not names:
+            continue
+        entity_asset = assets.get(entity_type)
+        if not entity_asset:
+            continue
+        corrected_names = [find_best_name(name, entity_asset) for name in names]
+        valid_names = [name for name in corrected_names if name]
+        if valid_names:
+            corrected_entities[entity_type] = valid_names
+
+    if not corrected_entities:
+        return "I'm sorry, but I couldn't find a match for that in my database."
+    print(f"✅ Corrected Entities: {corrected_entities}")
+
+    # --- 3. 원래 query에 corrected entity 이름으로 치환 ---
+    # (간단히 replace 사용, 나중에 정규식/토큰 기반 교체로 개선 가능)
+    corrected_query = query
+    for entity_type, names in corrected_entities.items():
+        for original_name, corrected_name in zip(extracted_entities[entity_type], names):
+            if original_name.lower() != corrected_name.lower():
+                corrected_query = corrected_query.replace(original_name, corrected_name)
+
+    print(f"📝 Corrected Query: {corrected_query}")
+
+    # --- 4. Cypher 생성 ---
+    # 원래 query + corrected query + 엔티티 정보를 모두 넣음
+    cypher_input = {
+        "schema": graph.schema,
+        "question": (
+            f"User's original question: {query}\n"
+            f"Corrected question with entity matches: {corrected_query}\n"
+            f"Entities recognized: {corrected_entities}\n"
+            "Generate a single Cypher query to answer the corrected question."
+        )
+    }
+    generated_cypher = chains['cypher_gen'].invoke(cypher_input)['text']
+    cleaned_cypher = clean_cypher_query(generated_cypher) # Assuming clean_cypher_query is defined
     print(f"🧠 Generated Cypher: {cleaned_cypher}")
 
     try:
-        return graph.query(cleaned_cypher)
+        cypher_result = graph.query(cleaned_cypher)
     except Exception as e:
         print(f"❌ Cypher execution failed: {e}")
         return "Sorry, I ran into an error trying to find that information."
 
+    # --- 5. Format the final response ---
+    if not cypher_result:
+        return "I couldn't find any information for your query. Do you have another question?"
+    
+    fact_based_response_chain = chains['fact_based_responder']
+    final_answer = fact_based_response_chain.invoke({
+        "user_query": query,
+        "cypher_result": json.dumps(cypher_result)
+    })['text']
+    
+    return final_answer
+
 # 2-D. Chit-Chat
-def chit_chat(user_query):
+def chit_chat(user_query, chains):
     """
     Handles simple, conversational, or off-topic queries.
     """
-    print("\n[Handling Chit-Chat]")
-    response = "I'm a movie recommendation chatbot. What kind of movie are you looking for? 😊"
-    print(f"✅ Response: {response}")
+    chit_chat_chain = chains['chit_chatter']
+    response = chit_chat_chain.invoke({"user_input": user_query})['text']
     return response
 
 # MODIFIED: The main controller now manages the conversation state flow.
@@ -97,4 +155,4 @@ def hybrid_retriever(user_query, graph, assets, chains, state, global_graph_nx):
         return personalized_recommendation(user_query, state, graph, assets, chains, global_graph_nx)
     
     else: # chit_chat or unknown
-        return "I'm a movie recommendation chatbot. What kind of movie are you looking for? 😊"
+        return chit_chat(user_query, chains)

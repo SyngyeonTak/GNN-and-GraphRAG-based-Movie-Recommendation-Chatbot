@@ -27,6 +27,15 @@ def find_best_match(query, choices, score_cutoff=85):
         pass
     return None
 
+def find_best_name(name, entity_asset):
+    all_names_in_db = list(entity_asset["mapping"].values())
+    best_match_name = find_best_match_with_embedding(
+        name_to_find=name,
+        entity_text_faiss_index=entity_asset["text_index"],
+        entity_names_in_db=all_names_in_db
+    )
+    return best_match_name
+
 def load_recommendation_assets(base_path="./dataset/faiss"):
     print("Loading all recommendation assets...")
     try:
@@ -97,15 +106,6 @@ def format_candidates_for_prompt(rerank_dict: dict) -> str:
 def retrieve_movies_by_preference(preferences, assets, graph, chains):
     cypher_chain = chains['cypher_gen']
     genre_mapper_chain = chains['genre_mapper']
-
-    def find_best_name(name, entity_asset):
-        all_names_in_db = list(entity_asset["mapping"].values())
-        best_match_name = find_best_match_with_embedding(
-            name_to_find=name,
-            entity_text_faiss_index=entity_asset["text_index"],
-            entity_names_in_db=all_names_in_db
-        )
-        return best_match_name
 
     def process_actor(name, asset):
         return find_best_name(name, asset)
