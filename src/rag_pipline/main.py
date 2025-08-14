@@ -19,6 +19,10 @@ from chains import (
     get_movie_suggester_chain,
     get_genre_mapper_chain,    
     get_personalized_response_chain,
+    get_fact_based_response_chain,
+    get_chit_chat_chain,
+    get_personalized_guide_chain,
+
 )
 
 from utils import (
@@ -94,6 +98,10 @@ def main():
         'movie_suggester': get_movie_suggester_chain(llm),
         'genre_mapper': get_genre_mapper_chain(llm),
         'personalized_responder': get_personalized_response_chain(llm),
+        'personalized_guide': get_personalized_guide_chain(llm),
+        'fact_based_responder': get_fact_based_response_chain(llm),
+        'chit_chatter': get_chit_chat_chain(llm)
+
     }
     
     
@@ -113,6 +121,9 @@ def main():
         test_id = row['TestCase_ID']
 
         user_input = str(row['User_Input'])
+
+        if not test_id.startswith(('P')):
+            continue
 
         # 새로운 시나리오가 시작되면 대화 상태 초기화 (멀티턴 대화는 유지)
         if not any(cont in test_id for cont in ['-2', '-3', '-4', '-5']):
