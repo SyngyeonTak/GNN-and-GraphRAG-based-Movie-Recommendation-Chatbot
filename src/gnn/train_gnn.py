@@ -21,7 +21,7 @@ HIDDEN_CHANNELS = 128
 OUT_CHANNELS = 64
 NUM_LAYERS = 2
 NUM_HEADS = 4
-EPOCHS = 100
+EPOCHS = 30
 LEARNING_RATE = 0.001
 # NEW: Mini-batching hyperparameters
 BATCH_SIZE = 2048
@@ -30,7 +30,7 @@ BATCH_SIZE = 2048
 NUM_NEIGHBORS = [15, 10] # For 2 layers. e.g., 15 neighbors for the first hop, 10 for the second.
 NODE_TYPES_TO_EMBED = ['movie', 'genre', 'actor', 'director']
 
-DUMP_PATH = './faiss/'
+DUMP_PATH = './dataset/faiss/'
 
 # --- 2. Data Loading & Verification Functions ---
 def load_data_from_snapshot(snapshot_path='./dataset/graph_snapshot.pkl'):
