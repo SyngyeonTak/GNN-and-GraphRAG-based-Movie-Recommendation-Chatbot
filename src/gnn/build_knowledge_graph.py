@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 import ast
 from neo4j_utils import get_neo4j_connection 
+from pathlib import Path
 
 class Neo4jConnection:
     """Manages the connection to the Neo4j database."""
@@ -143,13 +144,15 @@ def import_ratings(conn, ratings_df):
 def main():
     """Main execution function."""
     # Load environment variables from .env file
-    load_dotenv()
+    #dotenv_path = Path(__file__).parent.parent.parent / '.env'
+    #load_dotenv(dotenv_path=dotenv_path)
+    print(os.getcwd())
     conn = get_neo4j_connection()
     
     # Data file paths
-    PROCESSED_DATA_PATH = './dataset/processed/'
-    movies_file = os.path.join(PROCESSED_DATA_PATH, 'movies_processed_w_id.csv')
-    ratings_file = os.path.join(PROCESSED_DATA_PATH, 'ratings_processed_w_id.csv')
+    PROCESSED_DATA_PATH = 'dataset/processed/'
+    movies_file = os.path.join(PROCESSED_DATA_PATH, 'movies_processed.csv')
+    ratings_file = os.path.join(PROCESSED_DATA_PATH, 'ratings_processed.csv')
 
     # Load data from CSV files
     print("Loading processed CSV files...")

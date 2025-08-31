@@ -1,11 +1,14 @@
-from pathlib import Path # 1. pathlib 라이브러리 추가
-from dotenv import load_dotenv
+from neo4j import GraphDatabase
 
-import os
-dotenv_path = Path(__file__).parent.parent / '.env'
-    
-# 3. 해당 경로의 .env 파일을 로드
-load_dotenv(dotenv_path=dotenv_path)
-api_key = os.environ.get('TMDB_API_KEY')
+uri = "bolt://localhost:7687"
+driver = GraphDatabase.driver(uri, auth=("neo4j", "password"))
 
-print(api_key)
+try:
+    driver.verify_connectivity()
+    print("✅ Neo4j 연결 성공!")
+except Exception as e:
+    print("❌ 연결 실패:", e)
+
+with driver.session(database="neo4j") as session:
+    result = session.run("MATCH (n) RETURN count(n) AS cnt")
+    print(result.single()["cnt"])

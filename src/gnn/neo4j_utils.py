@@ -1,6 +1,7 @@
 import os
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
+from pathlib import Path
 
 class Neo4jConnection:
     """Manages the connection to the Neo4j database."""
@@ -37,7 +38,9 @@ class Neo4jConnection:
 
 def get_neo4j_connection():
     """Loads environment variables and returns a Neo4jConnection instance."""
-    load_dotenv()
+    #load_dotenv()
+    dotenv_path = Path(__file__).parent.parent.parent / '.env'
+    load_dotenv(dotenv_path=dotenv_path)
     uri = os.environ.get("NEO4J_URI")
     user = os.environ.get("NEO4J_USER")
     password = os.environ.get("NEO4J_PASSWORD")

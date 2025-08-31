@@ -2,7 +2,9 @@ from langchain_core.prompts import PromptTemplate, FewShotPromptTemplate
 from langchain.chains import LLMChain
 
 def get_genre_mapper_chain(llm):
-    """사용자가 말한 장르와 가장 의미가 유사한 장르를 DB에서 찾아주는 체인"""
+    """
+    Maps a user-stated genre to the closest genre available in the database.
+    """
     mapper_template = """
     You are a genre mapping expert. A user mentioned the genre '{user_genre}'.
     From the following list of available genres, which one is the closest semantic match?
@@ -13,7 +15,9 @@ def get_genre_mapper_chain(llm):
     return LLMChain(llm=llm, prompt=mapper_prompt)
 
 def get_movie_suggester_chain(llm):
-    """주어진 선호도에 대해 대표적인 영화 제목을 추천하는 체인"""
+    """
+    Suggests representative movie titles based on a given preference.
+    """
     suggester_template = """
     You are an expert movie recommender. Based on the user's preference for a genre, actor, or theme, please suggest 3 to 5 famous and representative movie titles.
     Your answer MUST be ONLY a comma-separated list of movie titles.
@@ -26,6 +30,9 @@ def get_movie_suggester_chain(llm):
     return LLMChain(llm=llm, prompt=suggester_prompt)
 
 def get_preference_extractor_chain(llm):
+    """
+    Extracts structured user preferences (actors, directors, genres, movies) as JSON.
+    """
     extractor_template = """
     You are an expert at understanding user preferences for movies.
     Your task is to extract key entities from the user's statement.
@@ -38,7 +45,6 @@ def get_preference_extractor_chain(llm):
     Respond with ONLY a JSON object containing the extracted information.
     If no information is found for a category, provide an empty list [].
     The keys of the JSON should be "actors", "directors", "genres" and "movies".
-
 
     Example 1:
     User's Statement: "I want to watch a thrilling action movie."
@@ -83,20 +89,12 @@ def get_preference_extractor_chain(llm):
     User's Statement: "{user_input}"
     JSON Output:
     """
-    # 이 라인이 실제 실행되는지 확인하는 것이 중요합니다.
     extractor_prompt = PromptTemplate(template=extractor_template, input_variables=["user_input"])
-
-    # ==========================================================
-    # 최종 디버깅: 생성된 프롬프트 객체의 input_variables를 직접 출력합니다.
-    print("DEBUG: Final created prompt object's input_variables:", extractor_prompt.input_variables)
-    # ==========================================================
-
     return LLMChain(llm=llm, prompt=extractor_prompt)
 
 def get_entity_extractor_chain(llm):
     """
-    쿼리에서 영화, 배우, 감독, 장르 개체를 추출하여
-    JSON 형식으로 반환하는 체인
+    Extracts movie, actor, director, and genre entities from a user query.
     """
     extractor_template = """
     You are an expert at identifying key entities in a user's question about movies.
@@ -140,15 +138,13 @@ def get_entity_extractor_chain(llm):
     Question: "{user_input}"
     JSON Output:
     """
-    extractor_prompt = PromptTemplate(
-        template=extractor_template,
-        input_variables=["user_input"]
-    )
-    
+    extractor_prompt = PromptTemplate(template=extractor_template, input_variables=["user_input"])
     return LLMChain(llm=llm, prompt=extractor_prompt)
 
 def get_query_router_chain(llm):
-    """사용자 쿼리를 세 가지 카테고리 중 하나로 분류하는 체인"""
+    """
+    Classifies a user query into one of: fact_based_search, personalized_recommendation, chit_chat.
+    """
     router_prompt_template = """
     You are a highly intelligent query classifier for a movie recommendation chatbot.
     Your task is to analyze the user's query and decide which tool to use.
@@ -164,20 +160,17 @@ def get_query_router_chain(llm):
     router_prompt = PromptTemplate(template=router_prompt_template, input_variables=["user_query"])
     return LLMChain(llm=llm, prompt=router_prompt, verbose=False)
 
-from langchain.prompts import PromptTemplate, FewShotPromptTemplate
-from langchain.chains import LLMChain
-
 def get_cypher_generation_chain(llm):
     """
-    안정적인 Cypher 생성용 LLMChain.
-    - 복합 조건은 MATCH 체인 또는 WITH 서브쿼리 스타일로 유도
-    - Cypher 문법 중괄호는 LangChain 템플릿 변수 오인 방지를 위해 {{}}로 이스케이프
+    Stable Cypher generation chain.
+    - When the question is about a specific movie, return only movie properties.
+    - Enforce DISTINCT and relationship directions.
+    - Avoid unnecessary expansions unless explicitly requested.
     """
-    # 1. LLM에게 보여줄 예시
     cypher_examples = [
         {
             "question": "Find movies starring Tom Hanks.",
-            "query": "MATCH (m:Movie)<-[:ACTED_IN]-(a:Actor {{name: 'Tom Hanks'}}) RETURN m.title, m.overview"
+            "query": "MATCH (m:Movie)<-[:ACTED_IN]-(a:Actor {{name: 'Tom Hanks'}}) RETURN m.movieId, m.title, m.overview"
         },
         {
             "question": "Find movies directed by Steven Spielberg that star Tom Hanks.",
@@ -185,42 +178,45 @@ def get_cypher_generation_chain(llm):
             MATCH (a:Actor {{name: 'Tom Hanks'}})-[:ACTED_IN]->(m:Movie)
             WITH m
             MATCH (d:Director {{name: 'Steven Spielberg'}})-[:DIRECTED]->(m)
-            RETURN m.title
+            RETURN m.movieId, m.title
             """
         },
         {
             "question": "What year was The Matrix released?",
-            "query": "MATCH (m:Movie {{title: 'The Matrix'}}) RETURN m.year"
+            "query": "MATCH (m:Movie {{title: 'Matrix, The'}}) RETURN m.movieId, m.title, m.overview, m.year"
         },
         {
             "question": "Find Sci-Fi movies starring Harrison Ford.",
-            "query": "MATCH (a:Actor {{name: 'Harrison Ford'}})-[:ACTED_IN]->(m:Movie)-[:HAS_GENRE]->(g:Genre {{name: 'Sci-Fi'}}) RETURN m.title"
+            "query": "MATCH (a:Actor {{name: 'Harrison Ford'}})-[:ACTED_IN]->(m:Movie)-[:HAS_GENRE]->(:Genre {{name: 'Sci-Fi'}}) RETURN m.movieId, m.title"
         }
     ]
 
-    # 2. 예시 형식 정의
     example_prompt = PromptTemplate(
         template="User Question: {question}\nCypher Query:\n{query}",
         input_variables=["question", "query"]
     )
 
-    # 3. 최종 프롬프트 구성
     cypher_prompt = FewShotPromptTemplate(
         examples=cypher_examples,
         example_prompt=example_prompt,
         prefix="""
         Task: Generate a read-only Cypher query to retrieve information from a Neo4j database.
         You are an expert Neo4j Cypher translator.
-        
-        IMPORTANT:
-        - For multiple constraints (e.g., a director AND an actor), use either:
-          (1) Multiple MATCH statements sharing the same variable, or
-          (2) A WITH clause to pass variables between matches.
-        - Avoid using `(:Label {{property: value}})` directly inside WHERE without a bound variable.
-        - In the Cypher output, use standard property syntax like {{property: 'value'}}.
-        
-        Here are some examples of user questions and their corresponding Cypher queries.
-        
+
+        IMPORTANT RULES:
+        - If the question is about a specific movie from preferences,
+          generate ONLY a query that MATCHes that Movie node and RETURN its properties:
+            m.movieId, m.title, m.overview, m.year
+        - Do NOT add related movies, Genre nodes, or any other expansions 
+          unless the user explicitly asks for "similar" or "related movies".
+        - For Actor, Director, or Genre queries, you may traverse their relationships.
+        - Always use standard property syntax like {{property: 'value'}}.
+        - Assume relationship directions:
+            * (Movie)-[:HAS_GENRE]->(Genre)
+            * (Actor)-[:ACTED_IN]->(Movie)
+            * (Director)-[:DIRECTED]->(Movie)
+        - Always use DISTINCT when returning multiple nodes to avoid duplicates.
+
         Schema:
         {schema}
         """,
@@ -232,14 +228,11 @@ def get_cypher_generation_chain(llm):
         input_variables=["schema", "question"],
         example_separator="\n\n"
     )
-    
     return LLMChain(llm=llm, prompt=cypher_prompt, verbose=False)
-
 
 def get_subgraph_cypher_chain(llm):
     """
-    [V2] 서브그래프 추출을 위해 '방향이 없는' 쿼리를 생성하도록
-    명확하게 지시하는 프롬프트를 사용하는 체인
+    Generates Cypher to extract a subgraph using undirected patterns (m)-[r]-(n).
     """
     subgraph_cypher_template = """
     Task: Generate a read-only Cypher query to retrieve a subgraph from a Neo4j database.
@@ -248,7 +241,7 @@ def get_subgraph_cypher_chain(llm):
     1. You will be given a list of movie IDs.
     2. First, find all movies with these IDs using a 'MATCH (m:Movie) WHERE m.movieId IN [...]' clause.
     3. Then, find all nodes directly connected to these movies.
-    4. **CRUCIAL**: To retrieve all connected nodes regardless of the relationship direction, you MUST use the undirected pattern `(m)-[r]-(n)`. Do NOT use directed patterns like `(m)->(n)` or `(m)<-(n)`.
+    4. To retrieve all connected nodes regardless of the relationship direction, you MUST use the undirected pattern `(m)-[r]-(n)`. Do NOT use directed patterns like `(m)->(n)` or `(m)<-(n)`.
     5. The query should return the matched movies, the connecting relationships, and the connected neighboring nodes. Use the pattern `RETURN m, r, n`.
     
     Schema:
@@ -260,18 +253,12 @@ def get_subgraph_cypher_chain(llm):
     Respond with ONLY the Cypher query.
     Cypher Query:
     """
-    
-    subgraph_cypher_prompt = PromptTemplate(
-        template=subgraph_cypher_template,
-        input_variables=["schema", "movie_ids"]
-    )
-    
+    subgraph_cypher_prompt = PromptTemplate(template=subgraph_cypher_template, input_variables=["schema", "movie_ids"])
     return LLMChain(llm=llm, prompt=subgraph_cypher_prompt, verbose=False)
 
 def get_personalized_response_chain(llm):
     """
-    GNN 리랭킹 결과와 사용자 쿼리/선호도를 바탕으로,
-    최종 추천 답변을 생성하는 LLMChain을 반환합니다.
+    Final natural language response generator after GNN re-ranking and preference extraction.
     """
     final_response_template = """
     You are a helpful and knowledgeable movie recommendation expert.
@@ -295,19 +282,15 @@ def get_personalized_response_chain(llm):
     {candidates_str}
     --- END OF CONTEXT ---
 
-    Respond with ONLY the final, natural language response to be shown to the user.
-
     Final Recommendation:
     """
-    
-    prompt = PromptTemplate(
-        template=final_response_template,
-        input_variables=["user_query", "preferences_str", "candidates_str"]
-    )
-    
+    prompt = PromptTemplate(template=final_response_template, input_variables=["user_query", "preferences_str", "candidates_str"])
     return LLMChain(llm=llm, prompt=prompt)
 
 def get_fact_based_response_chain(llm):
+    """
+    Formats database query results into a natural response.
+    """
     response_formatter_template = """
     You are a friendly and helpful movie chatbot assistant.
     Your task is to answer the user's question based on the data retrieved from a database.
@@ -326,18 +309,12 @@ def get_fact_based_response_chain(llm):
 
     Helpful Answer:
     """
-    
-    prompt = PromptTemplate(
-        template=response_formatter_template,
-        input_variables=["user_query", "cypher_result"]
-    )
-    
+    prompt = PromptTemplate(template=response_formatter_template, input_variables=["user_query", "cypher_result"])
     return LLMChain(llm=llm, prompt=prompt)
 
 def get_chit_chat_chain(llm):
     """
-    Creates a stateless Chit-Chat chain that responds to a single user input
-    without needing conversation history.
+    Stateless chit-chat chain for casual, non-factual user queries.
     """
     chit_chat_template = """
     You are 'CineMate', a friendly, witty, and knowledgeable movie recommendation chatbot.
@@ -348,35 +325,15 @@ def get_chit_chat_chain(llm):
     2. Find a creative link or bridge from the user's topic to a movie-related topic.
     3. End your response with an open-ended question about movies to guide the user.
 
-    --- EXAMPLES ---
-    User's Message: "Hey what's up?"
-    CineMate's Witty Response: "Hey there! I'm just sorting through my vast library of films. It's what I do best! Are you looking for a movie that perfectly matches your mood today? 😊"
-
-    User's Message: "The weather is great today!"
-    CineMate's Witty Response: "That's great to hear! ☀️ A beautiful day like this is perfect for a movie with gorgeous outdoor cinematography. Have you ever seen 'Call Me by Your Name'?"
-
-    User's Message: "I'm so tired lately."
-    CineMate's Witty Response: "It sounds like you've had a long day. At the end of a tiring day, sometimes a laugh-out-loud comedy is the perfect remedy. Would you like a recommendation for a fun movie to unwind with?"
-    --- END OF EXAMPLES ---
-    
     User's Message: "{user_input}"
     CineMate's Witty Response:
     """
-    
-    prompt = PromptTemplate(
-        template=chit_chat_template,
-        # The only input is now the user's message
-        input_variables=["user_input"]
-    )
-    
+    prompt = PromptTemplate(template=chit_chat_template, input_variables=["user_input"])
     return LLMChain(llm=llm, prompt=prompt)
 
 def get_personalized_guide_chain(llm):
     """
-    user_query가 fact-based인지, personalized recommendation인지 이미 분기된 상태에서,
-    personalized recommendation을 처리할 체인.
-    - 사용자 선호(preferences)가 충분하지 않으면 질문 유도
-    - 충분하면 Cypher 쿼리를 생성
+    Generates a Cypher query or asks clarifying questions for personalized recommendations.
     """
     prompt_template = PromptTemplate(
         input_variables=["user_query", "preferences", "schema"],
@@ -397,7 +354,5 @@ def get_personalized_guide_chain(llm):
 
             Output:
             """
-        )
-
-    chain = LLMChain(llm=llm, prompt=prompt_template, verbose=False)
-    return chain
+    )
+    return LLMChain(llm=llm, prompt=prompt_template, verbose=False)

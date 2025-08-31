@@ -1,18 +1,17 @@
 from utils import (
-            find_best_match, 
-            clean_cypher_query, 
-            find_movies_with_faiss,
-            format_candidates_for_prompt,
-            find_best_name
-        )
+    find_best_match, 
+    clean_cypher_query, 
+    find_movies_with_faiss,
+    format_candidates_for_prompt,
+    find_best_name
+)
 import json
 
 
-# MODIFIED: This function now just asks a question or triggers the Faiss search.
-# The state management logic is moved to the main retriever.
-
 def personalized_recommendation(user_query, state, graph, assets, chains, global_graph_nx):
-    """개인화 추천 요청을 Faiss 파이프라인으로 처리"""
+    """
+    Handle personalized recommendation requests through the Faiss pipeline.
+    """
     print("\n[Executing Personalized Recommendation with Faiss]")
     preferences = state.get('preferences', {})
 
@@ -25,8 +24,10 @@ def personalized_recommendation(user_query, state, graph, assets, chains, global
             schema=graph.schema
         )
     else:
-        print(f"🧠 Using preferences to find recommendations: {preferences}")
+        print(f"Using preferences to find recommendations: {preferences}")
         rerank_dict = find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx)
+        if not rerank_dict:
+            return "Sorry, I couldn't find good examples for your taste. Please try another preference."
         candidates_str = format_candidates_for_prompt(rerank_dict)
         preferences_str = json.dumps(preferences, indent=2)
 
@@ -39,15 +40,20 @@ def personalized_recommendation(user_query, state, graph, assets, chains, global
         }
         return personalized_response_chain.invoke(inputs)['text']
 
+
 def fact_based_search(query: str, graph, assets: dict, chains: dict):
     """
-    [V5] Corrects entities, replaces them in original query,
-    and generates/executes Cypher using both original context and corrected entity names.
+    Handles fact-based queries by:
+    1. Extracting structured entities
+    2. Performing fuzzy matching
+    3. Replacing entity names in the query
+    4. Generating Cypher query
+    5. Executing Cypher query and formatting the final answer
     """
     import json
     print("\n[Executing Consolidated Fact-Based Search]")
     
-    # --- 1. Extract structured entities (JSON format) ---
+    # 1. Extract structured entities (JSON format)
     extractor_chain = chains['entity_extractor']
     entity_json_str = extractor_chain.invoke({"user_input": query})['text']
     try:
@@ -57,9 +63,9 @@ def fact_based_search(query: str, graph, assets: dict, chains: dict):
 
     if not any(extracted_entities.values()):
         return "I'm sorry, but I couldn't find any movie or person information in your question."
-    print(f"✅ Extracted Entities: {extracted_entities}")
+    print(f"Extracted Entities: {extracted_entities}")
 
-    # --- 2. Perform Fuzzy Matching ---
+    # 2. Perform Fuzzy Matching
     corrected_entities = {}
     for entity_type, names in extracted_entities.items():
         if not names:
@@ -74,20 +80,18 @@ def fact_based_search(query: str, graph, assets: dict, chains: dict):
 
     if not corrected_entities:
         return "I'm sorry, but I couldn't find a match for that in my database."
-    print(f"✅ Corrected Entities: {corrected_entities}")
+    print(f"Corrected Entities: {corrected_entities}")
 
-    # --- 3. 원래 query에 corrected entity 이름으로 치환 ---
-    # (간단히 replace 사용, 나중에 정규식/토큰 기반 교체로 개선 가능)
+    # 3. Replace original query terms with corrected entity names
     corrected_query = query
     for entity_type, names in corrected_entities.items():
         for original_name, corrected_name in zip(extracted_entities[entity_type], names):
             if original_name.lower() != corrected_name.lower():
                 corrected_query = corrected_query.replace(original_name, corrected_name)
 
-    print(f"📝 Corrected Query: {corrected_query}")
+    print(f"Corrected Query: {corrected_query}")
 
-    # --- 4. Cypher 생성 ---
-    # 원래 query + corrected query + 엔티티 정보를 모두 넣음
+    # 4. Generate Cypher query
     cypher_input = {
         "schema": graph.schema,
         "question": (
@@ -98,16 +102,16 @@ def fact_based_search(query: str, graph, assets: dict, chains: dict):
         )
     }
     generated_cypher = chains['cypher_gen'].invoke(cypher_input)['text']
-    cleaned_cypher = clean_cypher_query(generated_cypher) # Assuming clean_cypher_query is defined
-    print(f"🧠 Generated Cypher: {cleaned_cypher}")
+    cleaned_cypher = clean_cypher_query(generated_cypher)
+    print(f"Generated Cypher: {cleaned_cypher}")
 
     try:
         cypher_result = graph.query(cleaned_cypher)
     except Exception as e:
-        print(f"❌ Cypher execution failed: {e}")
+        print(f"Cypher execution failed: {e}")
         return "Sorry, I ran into an error trying to find that information."
 
-    # --- 5. Format the final response ---
+    # 5. Format the final response
     if not cypher_result:
         return "I couldn't find any information for your query. Do you have another question?"
     
@@ -119,7 +123,7 @@ def fact_based_search(query: str, graph, assets: dict, chains: dict):
     
     return final_answer
 
-# 2-D. Chit-Chat
+
 def chit_chat(user_query, chains):
     """
     Handles simple, conversational, or off-topic queries.
@@ -128,9 +132,11 @@ def chit_chat(user_query, chains):
     response = chit_chat_chain.invoke({"user_input": user_query})['text']
     return response
 
-# MODIFIED: The main controller now manages the conversation state flow.
+
 def hybrid_retriever(user_query, graph, assets, chains, state, global_graph_nx):
-    """쿼리 라우팅 및 대화 상태를 관리하는 메인 컨트롤러"""
+    """
+    Main controller for query routing and conversation state management.
+    """
     print(f"\n--- User Query: '{user_query}' ---")
     
     if state.get('waiting_for_preference'):
@@ -154,5 +160,5 @@ def hybrid_retriever(user_query, graph, assets, chains, state, global_graph_nx):
         state['preferences'] = json.loads(extracted_prefs_str)
         return personalized_recommendation(user_query, state, graph, assets, chains, global_graph_nx)
     
-    else: # chit_chat or unknown
+    else:  # chit_chat or unknown
         return chit_chat(user_query, chains)

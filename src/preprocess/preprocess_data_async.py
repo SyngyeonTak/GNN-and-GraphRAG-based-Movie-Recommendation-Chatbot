@@ -11,14 +11,14 @@ from dotenv import load_dotenv
 from urllib.parse import quote # Library for URL encoding
 
 # Load .env file
-dotenv_path = Path(__file__).parent.parent / '.env'
+dotenv_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=dotenv_path)
 
 # TMDB API Key
 API_KEY = os.environ.get('TMDB_API_KEY')
 
 # Define file paths
-RAW_DATA_PATH = './dataset/raw/ml-1m_v2/'
+RAW_DATA_PATH = './dataset/raw/ml-32m/'
 PROCESSED_DATA_PATH = './dataset/processed/'
 
 # Number of concurrent API requests

@@ -1,5 +1,4 @@
 import os
-
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
@@ -7,9 +6,8 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_community.graphs import Neo4jGraph
 import pickle
-import networkx as nx
-# 분리된 파일에서 함수 임포트
 
+# Import functions from separated files
 from chains import (
     get_query_router_chain,
     get_cypher_generation_chain,
@@ -22,27 +20,17 @@ from chains import (
     get_fact_based_response_chain,
     get_chit_chat_chain,
     get_personalized_guide_chain,
-
 )
 
-from utils import (
-    load_recommendation_assets,
-)
+from utils import load_recommendation_assets
+from graph_utils import create_global_nx_graph
+from retriever import hybrid_retriever
 
-from graph_utils import (
-    create_global_nx_graph,
-)
 
-from retriever import (
-    hybrid_retriever
-)
-
-# ==================================================================
-# 1. Environment Setup
-# ==================================================================
 def setup_environment():
     """
-    Loads API keys and Neo4j credentials from .env, then returns LLM and Graph instances.
+    Loads API keys and Neo4j credentials from .env, 
+    initializes Neo4j graph connection and OpenAI LLM.
     """
     load_dotenv()
     
@@ -53,40 +41,39 @@ def setup_environment():
 
     try:
         graph = Neo4jGraph(url=uri, username=user, password=password)
-        print("✅ Neo4j database connection successful!")
+        print("Neo4j database connection successful.")
         print("Graph Schema:\n", graph.schema)
     except Exception as e:
-        print(f"❌ Neo4j connection failed: {e}")
+        print(f"Neo4j connection failed: {e}")
         print("Please check your NEO4J_URI, NEO4J_USER, and NEO4J_PASSWORD environment variables.")
         graph = None
 
-    # The API key is automatically read from the OPENAI_API_KEY environment variable
-    llm = ChatOpenAI(openai_api_key = openai_api_key, temperature=0, model_name="gpt-4o-mini")
-    print("✅ OpenAI LLM model initialized successfully!")
+    # Initialize LLM (API key is read from environment)
+    llm = ChatOpenAI(openai_api_key=openai_api_key, temperature=0, model_name="gpt-4o-mini")
+    print("OpenAI LLM model initialized successfully.")
     
     return llm, graph
 
-# ==================================================================
-# 3. Main Execution
-# ==================================================================
+
 def main():
     """
-    Sets up the entire program and runs test scenarios.
+    Sets up the entire program and runs automated test cases 
+    using the hybrid retriever pipeline.
     """
-    print("🚀 Starting Movie Recommendation Chatbot...")
-    print("="*60)
+    print("Starting Movie Recommendation Chatbot...")
+    print("=" * 60)
     
     llm, graph = setup_environment()
 
     with open('./dataset/graph_snapshot.pkl', 'rb') as f:
         snapshot_data = pickle.load(f)
 
-    # 전체 그래프를 미리 생성하여 메모리에 보관
+    # Build global graph in memory
     global_graph_nx = create_global_nx_graph(snapshot_data)
     rec_assets = load_recommendation_assets()
     
     if not all([llm, graph, rec_assets]):
-        print("\n❌ Exiting program due to setup or asset loading failure.")
+        print("\nExiting program due to setup or asset loading failure.")
         return
     
     chains = {
@@ -101,57 +88,54 @@ def main():
         'personalized_guide': get_personalized_guide_chain(llm),
         'fact_based_responder': get_fact_based_response_chain(llm),
         'chit_chatter': get_chit_chat_chain(llm)
-
     }
-    
     
     conversation_state = {}
     
-    print("\n" + "="*60)
-    print("🤖 Chatbot is ready. Let's start a conversation!")
-    print("="*60)
+    print("\n" + "=" * 60)
+    print("Chatbot is ready. Starting test conversations...")
+    print("=" * 60)
     
-
     test_cases_df = pd.read_csv("./dataset/TC/hybrid_test_cases.csv")
-    print(f"✅ Test cases loaded successfully from 'test_cases.csv'. Found {len(test_cases_df)} tests.")
+    print(f"Test cases loaded successfully from 'hybrid_test_cases.csv'. Found {len(test_cases_df)} cases.")
 
-    # 4. 각 테스트 케이스를 순회하며 실행
+    # Iterate through each test case
     conversation_state = {}
     for index, row in test_cases_df.iterrows():
         test_id = row['TestCase_ID']
-
         user_input = str(row['User_Input'])
 
-        if not test_id.startswith(('P')):
+        # Run only specific test group for now
+        if not test_id.startswith(('F-01')):
             continue
 
-        # 새로운 시나리오가 시작되면 대화 상태 초기화 (멀티턴 대화는 유지)
+        # Reset conversation state for new scenarios
         if not any(cont in test_id for cont in ['-2', '-3', '-4', '-5']):
             conversation_state = {}
-            print("\n" + "="*60)
-            print("🔄 New Scenario: Conversation state has been reset.")
+            print("\n" + "=" * 60)
+            print("New Scenario: Conversation state has been reset.")
 
         print(f"--- Running Test: {test_id} ---")
         print(f"Objective: {row['Test_Objective']}")
 
-        # 하이브리드 리트리버 호출
+        # Call hybrid retriever
         response = hybrid_retriever(
-            user_query = user_input,
-            graph = graph,
-            chains = chains,
-            state = conversation_state,
-            assets = rec_assets,
-            global_graph_nx = global_graph_nx
+            user_query=user_input,
+            graph=graph,
+            chains=chains,
+            state=conversation_state,
+            assets=rec_assets,
+            global_graph_nx=global_graph_nx
         )
 
-        # 결과 출력
-        print(f"\n👤 You: {user_input}")
-        print(f"🤖 Chatbot: {response}")
+        # Print results
+        print(f"\nUser: {user_input}")
+        print(f"Chatbot: {response}")
         print(f"Current State: {conversation_state}")
         print("-" * 50)
 
-    print("\n" + "="*60)
-    print("✅ All test scenarios have been executed.")
+    print("\n" + "=" * 60)
+    print("All test scenarios have been executed.")
 
 if __name__ == "__main__":
     main()
