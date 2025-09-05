@@ -170,7 +170,7 @@ def get_cypher_generation_chain(llm):
     cypher_examples = [
         {
             "question": "Find movies starring Tom Hanks.",
-            "query": "MATCH (m:Movie)<-[:ACTED_IN]-(a:Actor {{name: 'Tom Hanks'}}) RETURN m.movieId, m.title, m.overview"
+            "query": "MATCH (m:Movie)<-[:ACTED_IN]-(a:Actor {{name: 'Tom Hanks'}}) RETURN m.movieId, m.title, m.overview, m.avgRating, m.ratingCount"
         },
         {
             "question": "Find movies directed by Steven Spielberg that star Tom Hanks.",
@@ -178,16 +178,16 @@ def get_cypher_generation_chain(llm):
             MATCH (a:Actor {{name: 'Tom Hanks'}})-[:ACTED_IN]->(m:Movie)
             WITH m
             MATCH (d:Director {{name: 'Steven Spielberg'}})-[:DIRECTED]->(m)
-            RETURN m.movieId, m.title
+            RETURN m.movieId, m.title, m.avgRating, m.ratingCount
             """
         },
         {
             "question": "What year was The Matrix released?",
-            "query": "MATCH (m:Movie {{title: 'Matrix, The'}}) RETURN m.movieId, m.title, m.overview, m.year"
+            "query": "MATCH (m:Movie {{title: 'Matrix, The'}}) RETURN m.movieId, m.title, m.overview, m.year, m.avgRating, m.ratingCount"
         },
         {
             "question": "Find Sci-Fi movies starring Harrison Ford.",
-            "query": "MATCH (a:Actor {{name: 'Harrison Ford'}})-[:ACTED_IN]->(m:Movie)-[:HAS_GENRE]->(:Genre {{name: 'Sci-Fi'}}) RETURN m.movieId, m.title"
+            "query": "MATCH (a:Actor {{name: 'Harrison Ford'}})-[:ACTED_IN]->(m:Movie)-[:HAS_GENRE]->(:Genre {{name: 'Sci-Fi'}}) RETURN m.movieId, m.title, m.avgRating, m.ratingCount"
         }
     ]
 
@@ -206,7 +206,7 @@ def get_cypher_generation_chain(llm):
         IMPORTANT RULES:
         - If the question is about a specific movie from preferences,
           generate ONLY a query that MATCHes that Movie node and RETURN its properties:
-            m.movieId, m.title, m.overview, m.year
+            m.movieId, m.title, m.overview, m.year, m.avgRating, m.ratingCount
         - Do NOT add related movies, Genre nodes, or any other expansions 
           unless the user explicitly asks for "similar" or "related movies".
         - For Actor, Director, or Genre queries, you may traverse their relationships.

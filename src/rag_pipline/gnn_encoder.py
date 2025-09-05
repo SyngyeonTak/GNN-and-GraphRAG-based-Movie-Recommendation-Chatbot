@@ -51,7 +51,15 @@ def rank_movies_by_attention(attention_scores, data, nodes, subgraph_nx,
 
         attn_score = importance.item()
 
-        avg_rating, n_ratings = quality_map.get(node_id, (0.0, 0))
+        # node_id에서 숫자만 추출
+        if isinstance(node_id, str) and node_id.startswith("movie_"):
+            movie_key = int(node_id.replace("movie_", ""))
+        else:
+            movie_key = node_id
+
+        avg_rating, n_ratings = quality_map.get(movie_key, (0.0, 0))
+
+        #avg_rating, n_ratings = quality_map.get(node_id, (0.0, 0))
         # Normalize values
         norm_avg_rating = avg_rating / 5.0
         norm_n_ratings = np.log1p(n_ratings) / np.log1p(max_n_ratings)

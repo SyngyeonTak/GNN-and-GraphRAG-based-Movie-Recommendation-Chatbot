@@ -54,12 +54,12 @@ def load_recommendation_assets(base_path="./dataset/faiss"):
         entities = ["movie", "actor", "director", "genre"]
         
         for entity in entities:
-            gnn_emb_path = f"{base_path}/{entity}_embeddings.faiss"
+            #gnn_emb_path = f"{base_path}/{entity}_embeddings.faiss"
             text_emb_path = f"{base_path}/{entity}_text_embeddings.faiss"
             mapping_path = f"{base_path}/{entity}_mapping.json"
             
             assets[entity] = {
-                "gnn_index": faiss.read_index(gnn_emb_path),
+                #"gnn_index": faiss.read_index(gnn_emb_path),
                 "text_index": faiss.read_index(text_emb_path),
                 "mapping": json.load(open(mapping_path, 'r', encoding='utf-8'))
             }
@@ -184,31 +184,59 @@ def retrieve_movies_by_preference(preferences, assets, graph, chains):
     return retrieved_dict
 
 
-def fetch_movie_quality_scores(graph, movie_ids):
+def fetch_movie_quality_scores_from_dict(movie_dict):
     """
-    Fetch average ratings and rating counts for given movie_ids.
+    Extract average ratings and rating counts directly from movie_overview_dict.
+    Returns {movie_id: (avg_rating, rating_count)} so that val[0], val[1] indexing works.
     """
+    quality_map = {}
+    for key, val in movie_dict.items():
+        try:
+            movie_id = int(key.replace("movie_", ""))
+            # val = (title, overview, avgRating, ratingCount)
+            avg_rating = float(val[2]) if val[2] not in (None, "No avg rating") else 0.0
+            rating_count = int(val[3]) if val[3] not in (None, "No rating counts") else 0
+            quality_map[movie_id] = (avg_rating, rating_count)
+        except Exception:
+            continue
+    return quality_map
+
+def fetch_movie_quality_scores_from_nodes(graph, nodes):
+    """
+    Fetch avg_rating and rating_count directly from Movie nodes.
+    `nodes` contains identifiers like "movie_123", so we extract the int IDs.
+    """
+    # 1. nodes 리스트에서 "movie_123" → 123 으로 변환
+    movie_ids = [
+        int(n.replace("movie_", ""))
+        for n in nodes if isinstance(n, str) and n.startswith("movie_")
+    ]
     if not movie_ids:
         return {}
 
+    # 2. Cypher 쿼리 (Movie 노드 속성만 사용)
     cypher_query = f"""
-    MATCH (u:User)-[r:RATED]->(m:Movie)
+    MATCH (m:Movie)
     WHERE m.movieId IN [{",".join(map(str, movie_ids))}]
-    RETURN m.movieId AS id, avg(r.rating) AS avg_rating, count(r) AS n_ratings
+    RETURN m.movieId AS movie_id,
+           m.avgRating AS avg_rating,
+           m.ratingCount AS rating_count
     """
+
+    # 3. 실행 및 매핑
     try:
         rows = graph.query(clean_cypher_query(cypher_query))
-        return {
-            f"movie_{row['id']}": (
-                float(row.get("avg_rating", 0.0)),
-                int(row.get("n_ratings", 0))
+        quality_map = {
+            int(row["movie_id"]): (
+                float(row.get("avg_rating", 0.0) or 0.0),
+                int(row.get("rating_count", 0) or 0)
             )
             for row in rows
         }
+        return quality_map
     except Exception as e:
         print(f"Rating query failed: {e}")
         return {}
-
 
 def fetch_movie_overviews(graph, movie_ids):
     """
@@ -292,18 +320,20 @@ def find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx,
             rerank_dict[key] = []
             continue
 
-        movie_overview_dict = {
+        movie_dict = {
             f"movie_{m.get('m.movieId')}": (
                 m.get('m.title', 'Unknown'),
                 m.get('m.overview', 'No overview available')
+                #m.get('m.avgRating', 'No avg rating')
+                #m.get('m.ratingCount', 'No rating counts')
             )
             for m in movie_list if 'm.movieId' in m
         }
-        if not movie_overview_dict:
+        if not movie_dict:
             rerank_dict[key] = []
             continue
 
-        movie_ids = list(movie_overview_dict.keys())
+        movie_ids = list(movie_dict.keys())
         subgraph_nx = extract_subgraph_from_global(global_graph_nx, movie_ids)
         if subgraph_nx.number_of_nodes() == 0:
             rerank_dict[key] = []
@@ -321,8 +351,8 @@ def find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx,
             rerank_dict[key] = []
             continue
 
-        all_movie_ids = [int(mid.replace("movie_", "")) for mid in nodes if "movie_" in mid]
-        quality_map = fetch_movie_quality_scores(graph, all_movie_ids)
+        #quality_map = fetch_movie_quality_scores_from_dict(movie_dict)
+        quality_map = fetch_movie_quality_scores_from_nodes(graph, nodes)
 
         sorted_movies = rank_movies_by_attention(
             attention_scores, data, nodes, subgraph_nx, quality_map,
@@ -333,7 +363,7 @@ def find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx,
         rerank_ids = [int(item["movid_id"].replace("movie_", "")) for item in top_movies]
         overview_map = fetch_movie_overviews(graph, rerank_ids)
 
-        final_movies = enrich_movies_with_overview(top_movies, movie_overview_dict, overview_map)
+        final_movies = enrich_movies_with_overview(top_movies, movie_dict, overview_map)
         rerank_dict[key] = final_movies
 
     return rerank_dict

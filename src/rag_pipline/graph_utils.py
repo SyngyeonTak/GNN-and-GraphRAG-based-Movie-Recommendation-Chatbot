@@ -8,10 +8,12 @@ from torch_geometric.data import Data
 def create_global_nx_graph(snapshot_data: dict):
     """
     Create a global NetworkX graph from snapshot data.
-    Users are represented as user_{idx}, Movies as movie_{idx},
+    Movies are represented as movie_{idx},
     and other entities (Actor, Director, Genre) by their names.
     """
-    print("--- Creating global NetworkX graph (User=user_idx, Movie=movie_idx, Others=name) ---")
+    import networkx as nx
+
+    print("--- Creating global NetworkX graph (Movie=movie_idx, Others=name) ---")
     G = nx.Graph()
     
     node_mappings = snapshot_data['node_mappings']
@@ -20,20 +22,17 @@ def create_global_nx_graph(snapshot_data: dict):
 
     internal_to_final_id_map = {}
 
-    # Add User, Actor, Director, Genre nodes
-    for node_type in ['User', 'Actor', 'Director', 'Genre']:
+    # Add Actor, Director, Genre nodes (User 제거됨)
+    for node_type in ['Actor', 'Director', 'Genre']:
         if node_type in node_mappings:
             mapping = node_mappings[node_type]
             names_list = node_names.get(node_type, [])
             
             for neo4j_id, node_idx in mapping.items():
-                if node_type == "User":
-                    final_node_id = f"user_{node_idx+1}"
+                if node_idx < len(names_list):
+                    final_node_id = names_list[node_idx]
                 else:
-                    if node_idx < len(names_list):
-                        final_node_id = names_list[node_idx]
-                    else:
-                        continue  # Skip if no name available
+                    continue  # Skip if no name available
                 
                 G.add_node(final_node_id, type=node_type)
                 internal_to_final_id_map[(node_type, node_idx)] = final_node_id
@@ -61,42 +60,55 @@ def create_global_nx_graph(snapshot_data: dict):
     print(f"Graph created: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
     return G
 
-
-def extract_subgraph_from_global(global_G, seed_movie_ids):
+def extract_subgraph_from_global(global_G, seed_movie_ids, top_k=30, random_k=20):
     """
-    Extract a subgraph from the global graph, centered on given seed movies.
-    - Includes 1-hop neighbors (excluding Users).
-    - Adds 2-hop Movie nodes connected through non-User neighbors.
+    Extract a minimal subgraph from the global graph, centered on given seed movies.
+    - Selects top_k movies by degree + random_k movies from the rest.
+    - Connects them using shortest paths (no extra 1-hop/2-hop expansion).
     """
-    nodes_for_subgraph = set()
+    import random
+    import networkx as nx
 
-    for movie_id in seed_movie_ids:
-        if global_G.has_node(movie_id):
-            nodes_for_subgraph.add(movie_id)
+    if not seed_movie_ids:
+        print("No seed movie IDs provided.")
+        return nx.Graph()
 
-            # 1-hop: Add neighbors except Users
-            for neighbor in global_G.neighbors(movie_id):
-                if global_G.nodes[neighbor].get("type") != "User":
-                    nodes_for_subgraph.add(neighbor)
-
-                    # 2-hop: Add Movies connected through the neighbor
-                    for n2 in global_G.neighbors(neighbor):
-                        if (
-                            global_G.nodes[n2].get("type") == "Movie"
-                            and n2 != movie_id
-                        ):
-                            nodes_for_subgraph.add(n2)
-
-        else:
-            print(f"Warning: Seed movie '{movie_id}' not found in the global graph. Skipping.")
-
-    if not nodes_for_subgraph:
+    # Step 1. Filter seed movies to candidates with degree
+    seed_with_degree = [
+        (movie_id, global_G.degree(movie_id))
+        for movie_id in seed_movie_ids
+        if global_G.has_node(movie_id)
+    ]
+    if not seed_with_degree:
         print("No valid seed nodes found to create a subgraph.")
         return nx.Graph()
 
+    # Sort by degree (descending)
+    seed_with_degree.sort(key=lambda x: x[1], reverse=True)
+
+    # Select Top-K movies
+    top_movies = [movie_id for movie_id, _ in seed_with_degree[:top_k]]
+
+    # Random sampling from the remaining
+    remaining = [movie_id for movie_id, _ in seed_with_degree[top_k:]]
+    random_movies = random.sample(remaining, min(random_k, len(remaining)))
+
+    # Final selected movies
+    selected_movies = set(top_movies + random_movies)
+
+    # Step 2. Build minimal subgraph via shortest paths
+    nodes_for_subgraph = set(selected_movies)
+    for i, m1 in enumerate(selected_movies):
+        for m2 in list(selected_movies)[i+1:]:
+            try:
+                path = nx.shortest_path(global_G, source=m1, target=m2)
+                nodes_for_subgraph.update(path)
+            except nx.NetworkXNoPath:
+                continue
+
+    # Step 3. Return subgraph
     subgraph_nx = global_G.subgraph(nodes_for_subgraph).copy()
     return subgraph_nx
-
 
 def convert_nx_to_pyg(subgraph_nx, assets):
     """
@@ -115,20 +127,22 @@ def convert_nx_to_pyg(subgraph_nx, assets):
             mappings[entity_type] = {v: int(k) for k, v in asset_data['mapping'].items()}
 
     node_features = []
-    embedding_dim = assets['movie']['gnn_index'].d  # Dimension from FAISS index
-
+    #embedding_dim = assets['movie']['gnn_index'].d  # Dimension from FAISS index
+    embedding_dim = 64  
     for node_id in nodes:
-        try:
-            node_type = subgraph_nx.nodes[node_id].get('type').lower()
-            faiss_id = mappings[node_type][node_id]
-            embedding = assets[node_type]['gnn_index'].reconstruct(faiss_id)
-            node_features.append(embedding)
-        except KeyError:
-            print(f"Warning: Node '{node_id}' not found in '{node_type}' mapping. Using zero vector.")
-            node_features.append(np.zeros(embedding_dim))
-        except Exception as e:
-            print(f"An error occurred for node '{node_id}': {e}. Using zero vector.")
-            node_features.append(np.zeros(embedding_dim))
+        #try:
+        #    node_type = subgraph_nx.nodes[node_id].get('type').lower()
+        #    faiss_id = mappings[node_type][node_id]
+        #    embedding = assets[node_type]['gnn_index'].reconstruct(faiss_id)
+        #    node_features.append(embedding)
+        #except KeyError:
+        #    print(f"Warning: Node '{node_id}' not found in '{node_type}' mapping. Using zero vector.")
+        #    node_features.append(np.zeros(embedding_dim))
+        #except Exception as e:
+        #    print(f"An error occurred for node '{node_id}': {e}. Using zero vector.")
+        #    node_features.append(np.zeros(embedding_dim))
+
+        node_features.append(np.random.randn(embedding_dim))
             
     x = torch.tensor(np.array(node_features), dtype=torch.float)
 

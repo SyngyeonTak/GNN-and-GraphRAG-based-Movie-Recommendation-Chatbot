@@ -2,7 +2,6 @@
 
 import pandas as pd
 import os
-from pathlib import Path
 import ast
 
 RAW_PROCESSED_PATH = './dataset/processed/'
@@ -27,35 +26,36 @@ def reindex_ids():
 
     # --- Reindex movieId sequentially (1-based) ---
     filtered_movies = filtered_movies.reset_index(drop=True)
-    filtered_movies['movieId_old'] = filtered_movies['movieId']  # 기존 id 보관
-    filtered_movies['movieId'] = filtered_movies.index + 1  # 1,2,3,... 순차 id 부여
+    filtered_movies['movieId_old'] = filtered_movies['movieId']
+    filtered_movies['movieId'] = filtered_movies.index + 1
 
     # --- Map old movieId -> new movieId ---
     movie_id_map = dict(zip(filtered_movies['movieId_old'], filtered_movies['movieId']))
 
     # --- Filter ratings for valid movies and update movieId ---
     ratings_filtered = ratings_df[ratings_df['movieId'].isin(movie_id_map.keys())].copy()
-    ratings_filtered['movieId_old'] = ratings_filtered['movieId']
     ratings_filtered['movieId'] = ratings_filtered['movieId'].map(movie_id_map)
 
-    # --- Reindex userId sequentially (1-based) ---
-    user_ids = sorted(ratings_filtered['userId'].unique())
-    user_id_map = {old_id: new_id for new_id, old_id in enumerate(user_ids, start=1)}
-    ratings_filtered['userId_old'] = ratings_filtered['userId']
-    ratings_filtered['userId'] = ratings_filtered['userId'].map(user_id_map)
+    # --- Compute avg_rating and rating_count per movie ---
+    rating_stats = (
+        ratings_filtered.groupby("movieId")["rating"]
+        .agg(avg_rating="mean", rating_count="count")
+        .reset_index()
+    )
 
-    # --- Save updated CSVs ---
-    movies_outfile = os.path.join(OUTPUT_PATH, 'movies_processed_w_id.csv')
-    ratings_outfile = os.path.join(OUTPUT_PATH, 'ratings_processed_w_id.csv')
+    # --- Merge stats back into filtered_movies ---
+    filtered_movies = filtered_movies.merge(rating_stats, on="movieId", how="left")
 
+    # NaN 처리 (평점이 전혀 없는 영화는 0으로)
+    filtered_movies["avg_rating"] = filtered_movies["avg_rating"].fillna(0).round(2)
+    filtered_movies["rating_count"] = filtered_movies["rating_count"].fillna(0).astype(int)
+
+    # --- Save updated movies CSV only ---
+    movies_outfile = os.path.join(OUTPUT_PATH, 'movies_processed_final.csv')
     filtered_movies.to_csv(movies_outfile, index=False)
-    ratings_filtered.to_csv(ratings_outfile, index=False)
 
-    print(f"Reindexed movies saved to: {movies_outfile}")
-    print(f"Reindexed ratings saved to: {ratings_outfile}")
+    print(f"Movies with ratings saved to: {movies_outfile}")
     print(f"Number of movies retained: {len(filtered_movies)}")
-    print(f"Number of ratings retained: {len(ratings_filtered)}")
-    print(f"Number of unique users: {len(user_id_map)}")
 
 if __name__ == "__main__":
     reindex_ids()

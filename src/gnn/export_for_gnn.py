@@ -1,6 +1,9 @@
 import pickle
 from neo4j_utils import get_neo4j_connection
 
+import pickle
+from neo4j_utils import get_neo4j_connection
+
 def export_graph_data_to_file():    
     graph_data_for_pickle = {}
     conn = None
@@ -10,7 +13,7 @@ def export_graph_data_to_file():
         print("Connected to local Neo4j.")
 
         # 2. extract node data 
-        node_types = ['User', 'Movie', 'Genre', 'Actor', 'Director']
+        node_types = ['Movie', 'Genre', 'Actor', 'Director']
         node_mappings = {}
         node_names = {node_type: [] for node_type in node_types}
 
@@ -34,7 +37,6 @@ def export_graph_data_to_file():
 
         # 3. extract edges
         edge_definitions = [
-            ('User', 'RATED', 'Movie'), 
             ('Movie', 'HAS_GENRE', 'Genre'),
             ('Actor', 'ACTED_IN', 'Movie'), 
             ('Director', 'DIRECTED', 'Movie')
@@ -60,6 +62,7 @@ def export_graph_data_to_file():
     finally:
         if conn:
             conn.close()
+
 
 def verify_snapshot_file(snapshot_path='graph_snapshot.pkl'):
     """
