@@ -1,9 +1,6 @@
 import pickle
 from neo4j_utils import get_neo4j_connection
 
-import pickle
-from neo4j_utils import get_neo4j_connection
-
 def export_graph_data_to_file():    
     graph_data_for_pickle = {}
     conn = None
@@ -13,7 +10,7 @@ def export_graph_data_to_file():
         print("Connected to local Neo4j.")
 
         # 2. extract node data 
-        node_types = ['Movie', 'Genre', 'Actor', 'Director']
+        node_types = ['Movie', 'Genre', 'Actor', 'Director', 'User']
         node_mappings = {}
         node_names = {node_type: [] for node_type in node_types}
 
@@ -23,12 +20,14 @@ def export_graph_data_to_file():
                 name_property = ", n.title AS name"
             elif node_type in ['Genre', 'Actor', 'Director']:
                 name_property = ", n.name AS name"
+            elif node_type == 'User':
+                name_property = ""
             
             query = f"MATCH (n:{node_type}) RETURN elementId(n) AS neo4j_id{name_property}"
             records = conn.execute_query(query)
 
             node_mappings[node_type] = {record["neo4j_id"]: i for i, record in enumerate(records)}
-            if name_property:
+            if "name" in records[0].keys() if records else []:
                 node_names[node_type] = [record["name"] for record in records]
         
         graph_data_for_pickle['node_mappings'] = node_mappings
@@ -39,7 +38,8 @@ def export_graph_data_to_file():
         edge_definitions = [
             ('Movie', 'HAS_GENRE', 'Genre'),
             ('Actor', 'ACTED_IN', 'Movie'), 
-            ('Director', 'DIRECTED', 'Movie')
+            ('Director', 'DIRECTED', 'Movie'),
+            ('User', 'RATED', 'Movie')   # ✅ User → Movie 관계 추가
         ]
         edge_indices = {}
         for src_type, rel_type, dst_type in edge_definitions:
@@ -64,7 +64,7 @@ def export_graph_data_to_file():
             conn.close()
 
 
-def verify_snapshot_file(snapshot_path='graph_snapshot.pkl'):
+def verify_snapshot_file(snapshot_path='./dataset/graph_snapshot.pkl'):
     """
     Loads the graph snapshot file and prints the number of nodes and relationships
     for each type to verify its contents.
@@ -89,14 +89,11 @@ def verify_snapshot_file(snapshot_path='graph_snapshot.pkl'):
         if not node_mappings:
             print("  No node data found.")
         else:
-            # Sort items for consistent output order
             for node_type, mapping in sorted(node_mappings.items()):
-                # The number of nodes is the number of entries in the mapping dictionary
                 count = len(mapping)
                 print(f"  - {node_type.capitalize():<10}: {count} nodes")
     except KeyError:
         print("  'node_mappings' key not found in the snapshot file.")
-
 
     # --- 2. Verify Relationship Counts ---
     print("\n[Relationship Counts]")
@@ -105,18 +102,16 @@ def verify_snapshot_file(snapshot_path='graph_snapshot.pkl'):
         if not edge_indices:
             print("  No relationship data found.")
         else:
-            # Sort items for consistent output order
             for edge_key, edge_list in sorted(edge_indices.items()):
                 src, rel, dst = edge_key
-                # The number of relationships is the length of the source/destination node lists
                 count = len(edge_list[0])
-                # Format for readability
                 formatted_rel = f"({src.capitalize()})-[{rel.upper()}]->({dst.capitalize()})"
                 print(f"  - {formatted_rel:<40}: {count} relationships")
     except KeyError:
         print("  'edge_indices' key not found in the snapshot file.")
 
     print("\n--- Verification Complete ---")
+
 
 if __name__ == "__main__":
     export_graph_data_to_file()

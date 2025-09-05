@@ -54,12 +54,12 @@ def load_recommendation_assets(base_path="./dataset/faiss"):
         entities = ["movie", "actor", "director", "genre"]
         
         for entity in entities:
-            #gnn_emb_path = f"{base_path}/{entity}_embeddings.faiss"
+            gnn_emb_path = f"{base_path}/{entity}_embeddings.faiss"
             text_emb_path = f"{base_path}/{entity}_text_embeddings.faiss"
             mapping_path = f"{base_path}/{entity}_mapping.json"
             
             assets[entity] = {
-                #"gnn_index": faiss.read_index(gnn_emb_path),
+                "gnn_index": faiss.read_index(gnn_emb_path),
                 "text_index": faiss.read_index(text_emb_path),
                 "mapping": json.load(open(mapping_path, 'r', encoding='utf-8'))
             }
@@ -216,11 +216,11 @@ def fetch_movie_quality_scores_from_nodes(graph, nodes):
 
     # 2. Cypher 쿼리 (Movie 노드 속성만 사용)
     cypher_query = f"""
-    MATCH (m:Movie)
+    MATCH (u:User)-[r:RATED]->(m:Movie)
     WHERE m.movieId IN [{",".join(map(str, movie_ids))}]
     RETURN m.movieId AS movie_id,
-           m.avgRating AS avg_rating,
-           m.ratingCount AS rating_count
+           avg(r.rating) AS avg_rating,
+           count(r.rating) AS rating_count
     """
 
     # 3. 실행 및 매핑
@@ -334,7 +334,7 @@ def find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx,
             continue
 
         movie_ids = list(movie_dict.keys())
-        subgraph_nx = extract_subgraph_from_global(global_graph_nx, movie_ids)
+        subgraph_nx = extract_subgraph_from_global(global_graph_nx, movie_ids, assets)
         if subgraph_nx.number_of_nodes() == 0:
             rerank_dict[key] = []
             continue
