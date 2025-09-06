@@ -103,14 +103,19 @@
 - **UI (Gradio)**
   - ✅ Gradio Chatbot UI 구현  
   - ✅ 초기 인사말 메시지 기능 추가  
-  - ✅ 백엔드 검색 로직과 연동
+  - ✅ 백엔드 검색 로직과 연동  
+
+  *예시: "Who directed Interstellar?" → 감독 정보를 직접 반환*  
+  <p align="center">
+    <img src="./images/gradio_fact.png" alt="Fact-based Demo" width="600"/>
+  </p>
+
+  *예시: "Recommend me some sci-fi movies that came out in 2010's" → 2010년대 SF 영화 추천*  
+  <p align="center">
+    <img src="./images/gradio_per_01.png" alt="Personalized Demo 1" width="600"/>
+    <img src="./images/gradio_per_02.png" alt="Personalized Demo 2" width="600"/>
+  </p>
   
-  ![Fact-based Demo](./images/gradio_fact.png)  
-  *예시: "Who directed Interstellar?" → 감독 정보를 직접 반환*
-  
-  ![Personalized Demo 1](./images/gradio_per_01.png)  
-  ![Personalized Demo 2](./images/gradio_per_02.png)  
-  *예시: "Recommend me some sci-fi movies that came out in 2010's" → 2010년대 SF 영화 추천*
 
 - **개선 작업**
   - ✅ 추천 랭킹 개선 (관련성 × 정규화된 평점/인기도 결합)  
