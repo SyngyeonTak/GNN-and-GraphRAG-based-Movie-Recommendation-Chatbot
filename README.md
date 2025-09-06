@@ -26,7 +26,13 @@
   - ✅ **FAISS**에 노드 임베딩 저장 (유사도 검색)  
   - ✅ `genre`, `actor`, `director`, `user` 임베딩 추가 (LLM preference 반영)  
   - ✅ 노드 타입별 출력 레이어 공유 (임베딩 공간 정렬)  
-
+  ```mermaid
+  flowchart TD
+    A["Embedding Layer (128-d)"] --> B1["GATConv Layer 1 (multi-head)"]
+    B1 --> B2["GATConv Layer 2"]
+    B2 --> C["Shared Output Linear (64-d)"]
+    B2 --> D["Decoder: User-Movie link prediction"]
+  ```
 ---
 
 ### **Phase 2: LLM 통합 & RAG**
