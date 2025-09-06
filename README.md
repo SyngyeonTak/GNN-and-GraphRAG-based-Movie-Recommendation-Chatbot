@@ -156,8 +156,15 @@ src/
 ## 💡 주요 기여
 - **이종 그래프 GNN 임베딩**과 **GraphRAG**를 결합한 하이브리드 영화 추천 구현  
 - **라우터 + 리트리버 구조**로 fact/personalized/chit-chat 쿼리 분리 처리  
-- **설명 가능한 추천**: 서브그래프 근거 경로 기반 설명 제공  
-- **랭킹 개선**: relevance × popularity normalization  
+- **설명 가능한 추천**: 서브그래프 근거 경로 기반 설명
+
+## 📖참고 문헌
+- Wang, X., Ji, H., Shi, C., Wang, B., Ye, Y., Cui, P., & Yu, P. S. (2019).  
+  [Heterogeneous Graph Attention Network (HGAT)](https://dl.acm.org/doi/10.1145/3308558.3313562). *The World Wide Web Conference (WWW)*, 2022–2032.  
+
+- Han, H., Wang, Y., Shomer, H., Guo, K., Ding, J., Lei, Y., ... & Tang, J. (2024).  
+  [Retrieval-Augmented Generation with Graphs (GraphRAG)](https://arxiv.org/abs/2501.00309). *arXiv preprint arXiv:2501.00309*.
+
 
 ---
 
