@@ -9,7 +9,7 @@
 .ipynb_checkpoints/
 
 # Data
-#dataset/
+dataset/
 guide/
 
 # IDE
