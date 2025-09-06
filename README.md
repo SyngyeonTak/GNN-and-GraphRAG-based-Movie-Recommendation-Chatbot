@@ -4,6 +4,24 @@
 
 ---
 
+```mermaid
+  flowchart LR
+    A["Dataset + Preprocess"]
+    B["Neo4j Graph DB"]
+    C["GNN (HGAT) <br> FAISS Embeddings"]
+    D["Hybrid Retriever"]
+    E["LLM Chains"]
+    F["Gradio UI (Chatbot)"]
+
+    A --> B --> C --> D --> E --> F
+
+    style A fill:#fce4ec,stroke:#f8bbd0,stroke-width:1px,color:#000
+    style B fill:#e3f2fd,stroke:#90caf9,stroke-width:1px,color:#000
+    style C fill:#e8f5e9,stroke:#a5d6a7,stroke-width:1px,color:#000
+    style D fill:#fffde7,stroke:#fff59d,stroke-width:1px,color:#000
+    style E fill:#f3e5f5,stroke:#ce93d8,stroke-width:1px,color:#000
+    style F fill:#e0f7fa,stroke:#80deea,stroke-width:1px,color:#000
+```
 ## 🚀 프로젝트 로드맵
 
 ### **Phase 1: 기초 & 데이터 (지식 그래프 + GNN)**
@@ -27,7 +45,7 @@
   - ✅ `genre`, `actor`, `director`, `user` 임베딩 추가 (LLM preference 반영)  
   - ✅ 노드 타입별 출력 레이어 공유 (임베딩 공간 정렬)  
   ```mermaid
-  flowchart TD
+  flowchart LR
     A["Embedding Layer (128-d)"] --> B1["GATConv Layer 1 (multi-head)"]
     B1 --> B2["GATConv Layer 2"]
     B2 --> C["Shared Output Linear (64-d)"]
@@ -36,6 +54,18 @@
 ---
 
 ### **Phase 2: LLM 통합 & RAG**
+- **LLM Chains**
+  - ✅ Query Router → 사용자의 입력을 `fact_based_search`, `personalized_recommendation`, `chit_chat` 중 하나로 분류  
+  - ✅ Entity / Preference Extractor → 배우, 감독, 장르, 영화명 추출 및 JSON 구조화  
+  - ✅ Genre Mapper → 사용자가 언급한 장르를 DB에 존재하는 장르와 의미적으로 매핑  
+  - ✅ Movie Suggester → 특정 배우·장르 기반 대표 영화 후보 제안  
+  - ✅ Cypher Generator → Neo4j에 실행할 Cypher 쿼리 생성 (사실 기반 검색용)  
+  - ✅ Subgraph Cypher Generator → 후보 영화 주변의 서브그래프를 추출하는 Cypher 생성  
+  - ✅ Personalized Response → GNN 기반 후보 영화 + 사용자 선호도를 결합해 자연스러운 추천 문장 생성  
+  - ✅ Fact-based Response → Cypher 쿼리 결과를 사람이 읽기 쉬운 문장으로 포맷  
+  - ✅ Chit-chat Response → 가벼운 대화, 인사말, off-topic 메시지 대응  
+  - ✅ Personalized Guide → Cold-start 상황에서 추가 선호도를 물어보거나, 적절한 Cypher를 생성  
+
 - **하이브리드 검색기**
   - ✅ 쿼리 라우터 (fact / personalized / chit-chat 분류)  
   - ✅ Zero-shot 프롬프트 기반 라우팅  
