@@ -22,13 +22,14 @@
   - ✅ Neo4j Browser에서 Cypher 쿼리 검증 완료  
 
 - **GNN 추천 모델 학습**
+  ![System Overview](./images/gnn_architecture.png)
   - ✅ 그래프 데이터를 PyTorch Geometric (PyG) 객체로 변환  
   - ✅ **Heterogeneous Graph Attention Network (HGAT)** 구현  
   - ✅ 학습 파이프라인 구축 및 손실 수렴 확인   
   - ✅ **FAISS**에 노드 임베딩 저장 (유사도 검색)  
   - ✅ `genre`, `actor`, `director`, `user` 임베딩 추가 (LLM preference 반영)  
   - ✅ 노드 타입별 출력 레이어 공유 (임베딩 공간 정렬)  
-![System Overview](./images/gnn_architecture.png)
+
 ---
 
 ### **Phase 2: LLM 통합 & RAG**
@@ -60,6 +61,7 @@
   - ✅ 결과 파싱 후 답변 생성  
 
 - **개인화 추천**
+  ![System Overview](./images/personalized_recommendation.png)
   - ✅ **유저 Query → Preference 추출 및 Cypher 수행**  
     - 사용자 입력에서 배우, 감독, 장르, 영화 키워드를 추출  
     - 추출된 키워드를 내부 매핑 자산과 비교해 정제  
