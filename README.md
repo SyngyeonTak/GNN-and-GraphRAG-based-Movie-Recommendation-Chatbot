@@ -56,7 +56,8 @@
   - 결과 파싱 후 답변 생성  
 
 - **개인화 추천**
-  ![System Overview](./images/personalized_recommendation.png)
+  ![System Overview](./images/personalized_recommendation_01.png)
+  ![System Overview](./images/personalized_recommendation_02.png)
   - **유저 Query → Preference 추출 및 Cypher 수행**  
     - 사용자 입력에서 배우, 감독, 장르, 영화 키워드를 추출  
     - 추출된 키워드를 내부 매핑 자산과 비교해 정제  
