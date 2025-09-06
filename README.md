@@ -4,24 +4,7 @@
 
 ---
 
-```mermaid
-  flowchart LR
-    A["Dataset + Preprocess"]
-    B["Neo4j Graph DB"]
-    C["GNN (HGAT) <br> FAISS Embeddings"]
-    D["Hybrid Retriever"]
-    E["LLM Chains"]
-    F["Gradio UI (Chatbot)"]
-
-    A --> B --> C --> D --> E --> F
-
-    style A fill:#fce4ec,stroke:#f8bbd0,stroke-width:1px,color:#000
-    style B fill:#e3f2fd,stroke:#90caf9,stroke-width:1px,color:#000
-    style C fill:#e8f5e9,stroke:#a5d6a7,stroke-width:1px,color:#000
-    style D fill:#fffde7,stroke:#fff59d,stroke-width:1px,color:#000
-    style E fill:#f3e5f5,stroke:#ce93d8,stroke-width:1px,color:#000
-    style F fill:#e0f7fa,stroke:#80deea,stroke-width:1px,color:#000
-```
+![System Overview](./images/project_overview.png)
 ## 🚀 프로젝트 로드맵
 
 ### **Phase 1: 기초 & 데이터 (지식 그래프 + GNN)**
@@ -30,7 +13,8 @@
   - ✅ TMDb API 연동으로 배우/감독 메타데이터 수집
   - ✅ 배우·감독 정보가 존재하는 영화 중 **평점 수 기준 상위 3,000편**을 선별  
   - ✅ User rating은 해당 3,000편을 기준으로 약 **100만 개(1M)** 샘플
-  - ✅ 데이터 정제  
+  - ✅ 데이터 정제
+  - 🔗 [Download Processed Dataset (Google Drive)](https://drive.google.com/file/d/1NaMZrj6rlykH5yycyVD58pMQWE5dtBXs/view?usp=drive_link)
 
 - **지식 그래프 구축 (Neo4j)**
   - ✅ 노드: `Movie`, `User`, `Genre`, `Actor`, `Director`  
@@ -44,13 +28,7 @@
   - ✅ **FAISS**에 노드 임베딩 저장 (유사도 검색)  
   - ✅ `genre`, `actor`, `director`, `user` 임베딩 추가 (LLM preference 반영)  
   - ✅ 노드 타입별 출력 레이어 공유 (임베딩 공간 정렬)  
-  ```mermaid
-  flowchart LR
-    A["Embedding Layer (128-d)"] --> B1["GATConv Layer 1 (multi-head)"]
-    B1 --> B2["GATConv Layer 2"]
-    B2 --> C["Shared Output Linear (64-d)"]
-    B2 --> D["Decoder: User-Movie link prediction"]
-  ```
+![System Overview](./images/gnn_architecture.png)
 ---
 
 ### **Phase 2: LLM 통합 & RAG**
@@ -125,7 +103,12 @@
 - **UI (Gradio)**
   - ✅ Gradio Chatbot UI 구현  
   - ✅ 초기 인사말 메시지 기능 추가  
-  - ✅ 백엔드 검색 로직과 연동  
+  - ✅ 백엔드 검색 로직과 연동
+  
+  ![Gradio Demo](./images/gradio_ui.png)
+  ![Gradio Demo](./images/gradio_fact.png)
+  ![Gradio Demo](./images/gradio_per_01.png)
+  ![Gradio Demo](./images/gradio_per_02.png)
 
 - **개선 작업**
   - ✅ 추천 랭킹 개선 (관련성 × 정규화된 평점/인기도 결합)  
@@ -178,8 +161,15 @@ src/
 ## 💡 주요 기여
 - **이종 그래프 GNN 임베딩**과 **GraphRAG**를 결합한 하이브리드 영화 추천 구현  
 - **라우터 + 리트리버 구조**로 fact/personalized/chit-chat 쿼리 분리 처리  
-- **설명 가능한 추천**: 서브그래프 근거 경로 기반 설명 제공  
-- **랭킹 개선**: relevance × popularity normalization  
+- **설명 가능한 추천**: 서브그래프 근거 경로 기반 설명
+
+## 📖참고 문헌
+- Wang, X., Ji, H., Shi, C., Wang, B., Ye, Y., Cui, P., & Yu, P. S. (2019).  
+  [Heterogeneous Graph Attention Network (HGAT)](https://dl.acm.org/doi/10.1145/3308558.3313562). *The World Wide Web Conference (WWW)*, 2022–2032.  
+
+- Han, H., Wang, Y., Shomer, H., Guo, K., Ding, J., Lei, Y., ... & Tang, J. (2024).  
+  [Retrieval-Augmented Generation with Graphs (GraphRAG)](https://arxiv.org/abs/2501.00309). *arXiv preprint arXiv:2501.00309*.
+
 
 ---
 
