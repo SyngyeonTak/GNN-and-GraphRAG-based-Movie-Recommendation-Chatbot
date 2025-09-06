@@ -4,24 +4,7 @@
 
 ---
 
-```mermaid
-  flowchart LR
-    A["Dataset + Preprocess"]
-    B["Neo4j Graph DB"]
-    C["GNN (HGAT) <br> FAISS Embeddings"]
-    D["Hybrid Retriever"]
-    E["LLM Chains"]
-    F["Gradio UI (Chatbot)"]
-
-    A --> B --> C --> D --> E --> F
-
-    style A fill:#fce4ec,stroke:#f8bbd0,stroke-width:1px,color:#000
-    style B fill:#e3f2fd,stroke:#90caf9,stroke-width:1px,color:#000
-    style C fill:#e8f5e9,stroke:#a5d6a7,stroke-width:1px,color:#000
-    style D fill:#fffde7,stroke:#fff59d,stroke-width:1px,color:#000
-    style E fill:#f3e5f5,stroke:#ce93d8,stroke-width:1px,color:#000
-    style F fill:#e0f7fa,stroke:#80deea,stroke-width:1px,color:#000
-```
+![System Overview](./images/project_overview.png)
 ## 🚀 프로젝트 로드맵
 
 ### **Phase 1: 기초 & 데이터 (지식 그래프 + GNN)**
@@ -44,13 +27,7 @@
   - ✅ **FAISS**에 노드 임베딩 저장 (유사도 검색)  
   - ✅ `genre`, `actor`, `director`, `user` 임베딩 추가 (LLM preference 반영)  
   - ✅ 노드 타입별 출력 레이어 공유 (임베딩 공간 정렬)  
-  ```mermaid
-  flowchart LR
-    A["Embedding Layer (128-d)"] --> B1["GATConv Layer 1 (multi-head)"]
-    B1 --> B2["GATConv Layer 2"]
-    B2 --> C["Shared Output Linear (64-d)"]
-    B2 --> D["Decoder: User-Movie link prediction"]
-  ```
+![System Overview](./images/gnn_architecture.png)
 ---
 
 ### **Phase 2: LLM 통합 & RAG**
