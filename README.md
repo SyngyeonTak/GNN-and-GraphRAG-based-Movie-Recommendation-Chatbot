@@ -33,17 +33,12 @@
 ---
 
 ### **Phase 2: LLM 통합 & RAG**
-- **LLM Chains**
-  - Query Router → 사용자의 입력을 `fact_based_search`, `personalized_recommendation`, `chit_chat` 중 하나로 분류  
-  - Entity / Preference Extractor → 배우, 감독, 장르, 영화명 추출 및 JSON 구조화  
-  - Genre Mapper → 사용자가 언급한 장르를 DB에 존재하는 장르와 의미적으로 매핑  
-  - Movie Suggester → 특정 배우·장르 기반 대표 영화 후보 제안  
+- **LLM main Chains**
+  - Query Router → 사용자의 입력을 `fact_based_search`, `personalized_recommendation`, `chit_chat` 중 하나로 분류    
   - Cypher Generator → Neo4j에 실행할 Cypher 쿼리 생성 (사실 기반 검색용)  
-  - Subgraph Cypher Generator → 후보 영화 주변의 서브그래프를 추출하는 Cypher 생성  
   - Personalized Response → GNN 기반 후보 영화 + 사용자 선호도를 결합해 자연스러운 추천 문장 생성  
   - Fact-based Response → Cypher 쿼리 결과를 사람이 읽기 쉬운 문장으로 포맷  
   - Chit-chat Response → 가벼운 대화, 인사말, off-topic 메시지 대응  
-  - Personalized Guide → Cold-start 상황에서 추가 선호도를 물어보거나, 적절한 Cypher를 생성  
 
 - **하이브리드 검색기**
   - 쿼리 라우터 (fact / personalized / chit-chat 분류)  
