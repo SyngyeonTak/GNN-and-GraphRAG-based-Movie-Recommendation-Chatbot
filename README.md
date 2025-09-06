@@ -103,7 +103,12 @@
 - **UI (Gradio)**
   - ✅ Gradio Chatbot UI 구현  
   - ✅ 초기 인사말 메시지 기능 추가  
-  - ✅ 백엔드 검색 로직과 연동  
+  - ✅ 백엔드 검색 로직과 연동
+  
+  ![Gradio Demo](./images/gradio_ui.png)
+  ![Gradio Demo](./images/gradio_fact.png)
+  ![Gradio Demo](./images/gradio_per_01.png)
+  ![Gradio Demo](./images/gradio_per_02.png)
 
 - **개선 작업**
   - ✅ 추천 랭킹 개선 (관련성 × 정규화된 평점/인기도 결합)  
