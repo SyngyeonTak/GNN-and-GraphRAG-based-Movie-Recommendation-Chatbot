@@ -8,7 +8,7 @@
 
 ### **Phase 1: 기초 & 데이터 (지식 그래프 + GNN)**
 - **데이터 준비**
-  - ✅ MovieLens 데이터셋 (movies, ratings, links.csv) 분석  
+  - ✅ MovieLens 32M 데이터셋 (movies, ratings)  
   - ✅ TMDb API 연동으로 배우/감독 메타데이터 수집
   - ✅ 배우·감독 정보가 존재하는 영화 중 **평점 수 기준 상위 3,000편**을 선별  
   - ✅ User rating은 해당 3,000편을 기준으로 약 **100만 개(1M)** 샘플
