@@ -9,77 +9,74 @@
 
 ### **Phase 1: 기초 & 데이터 (지식 그래프 + GNN)**
 - **데이터 준비**
-  - ✅ MovieLens 32M 데이터셋 (movies, ratings)  
-  - ✅ TMDb API 연동으로 배우/감독 메타데이터 수집
-  - ✅ 배우·감독 정보가 존재하는 영화 중 **평점 수 기준 상위 3,000편**을 선별  
-  - ✅ User rating은 해당 3,000편을 기준으로 약 **100만 개(1M)** 샘플
-  - ✅ 데이터 정제
+  - MovieLens 32M 데이터셋 (movies, ratings)  
+  - TMDb API 연동으로 배우/감독 메타데이터 수집
+  - 배우·감독 정보가 존재하는 영화 중 **평점 수 기준 상위 3,000편**을 선별  
+  - User rating은 해당 3,000편을 기준으로 약 **100만 개(1M)** 샘플
+  - 데이터 정제
   - 🔗 [Download Processed Dataset (Google Drive)](https://drive.google.com/file/d/1NaMZrj6rlykH5yycyVD58pMQWE5dtBXs/view?usp=drive_link)
 
 - **지식 그래프 구축 (Neo4j)**
-  - ✅ 노드: `Movie`, `User`, `Genre`, `Actor`, `Director`  
-  - ✅ 관계: `RATED`, `HAS_GENRE`, `ACTED_IN`, `DIRECTED`  
-  - ✅ Neo4j Browser에서 Cypher 쿼리 검증 완료  
+  - 노드: `Movie`, `User`, `Genre`, `Actor`, `Director`  
+  - 관계: `RATED`, `HAS_GENRE`, `ACTED_IN`, `DIRECTED`  
+  - Neo4j Browser에서 Cypher 쿼리 검증 완료  
 
 - **GNN 추천 모델 학습**
-  - ✅ 그래프 데이터를 PyTorch Geometric (PyG) 객체로 변환  
-  - ✅ **Heterogeneous Graph Attention Network (HGAT)** 구현  
-  - ✅ 학습 파이프라인 구축 및 손실 수렴 확인   
-  - ✅ **FAISS**에 노드 임베딩 저장 (유사도 검색)  
-  - ✅ `genre`, `actor`, `director`, `user` 임베딩 추가 (LLM preference 반영)  
-  - ✅ 노드 타입별 출력 레이어 공유 (임베딩 공간 정렬)  
-![System Overview](./images/gnn_architecture.png)
+  ![System Overview](./images/gnn_architecture.png)
+  - 그래프 데이터를 PyTorch Geometric (PyG) 객체로 변환  
+  - **Heterogeneous Graph Attention Network (HGAT)** 구현  
+  - 학습 파이프라인 구축 및 손실 수렴 확인   
+  - **FAISS**에 노드 임베딩 저장 (유사도 검색)  
+  - `genre`, `actor`, `director`, `user` 임베딩 추가 (LLM preference 반영)  
+  - 노드 타입별 출력 레이어 공유 (임베딩 공간 정렬)  
+
 ---
 
 ### **Phase 2: LLM 통합 & RAG**
-- **LLM Chains**
-  - ✅ Query Router → 사용자의 입력을 `fact_based_search`, `personalized_recommendation`, `chit_chat` 중 하나로 분류  
-  - ✅ Entity / Preference Extractor → 배우, 감독, 장르, 영화명 추출 및 JSON 구조화  
-  - ✅ Genre Mapper → 사용자가 언급한 장르를 DB에 존재하는 장르와 의미적으로 매핑  
-  - ✅ Movie Suggester → 특정 배우·장르 기반 대표 영화 후보 제안  
-  - ✅ Cypher Generator → Neo4j에 실행할 Cypher 쿼리 생성 (사실 기반 검색용)  
-  - ✅ Subgraph Cypher Generator → 후보 영화 주변의 서브그래프를 추출하는 Cypher 생성  
-  - ✅ Personalized Response → GNN 기반 후보 영화 + 사용자 선호도를 결합해 자연스러운 추천 문장 생성  
-  - ✅ Fact-based Response → Cypher 쿼리 결과를 사람이 읽기 쉬운 문장으로 포맷  
-  - ✅ Chit-chat Response → 가벼운 대화, 인사말, off-topic 메시지 대응  
-  - ✅ Personalized Guide → Cold-start 상황에서 추가 선호도를 물어보거나, 적절한 Cypher를 생성  
+- **LLM main Chains**
+  - Query Router → 사용자의 입력을 `fact_based_search`, `personalized_recommendation`, `chit_chat` 중 하나로 분류    
+  - Cypher Generator → Neo4j에 실행할 Cypher 쿼리 생성 (사실 기반 검색용)  
+  - Personalized Response → GNN 기반 후보 영화 + 사용자 선호도를 결합해 자연스러운 추천 문장 생성  
+  - Fact-based Response → Cypher 쿼리 결과를 사람이 읽기 쉬운 문장으로 포맷  
+  - Chit-chat Response → 가벼운 대화, 인사말, off-topic 메시지 대응  
 
 - **하이브리드 검색기**
-  - ✅ 쿼리 라우터 (fact / personalized / chit-chat 분류)  
-  - ✅ Zero-shot 프롬프트 기반 라우팅  
-  - ✅ 상태 기반 통합 검색 로직 구축
+  - 쿼리 라우터 (fact / personalized / chit-chat 분류)  
+  - Zero-shot 프롬프트 기반 라우팅  
+  - 상태 기반 통합 검색 로직 구축
  
 - **엔티티 텍스트 매칭**
-  - ✅ 배우, 감독, 장르, 영화 이름을 JSON 매핑 파일로부터 로드
-  - ✅ `SentenceTransformer (all-MiniLM-L6-v2)`를 사용해 텍스트 임베딩 생성
-  - ✅ FAISS Index에 저장 후 사용자 쿼리 임베딩과 최근접 탐색 수행
-  - ✅ 철자 오류나 표현 차이가 있어도 가장 유사한 엔티티를 안정적으로 매핑
+  - 배우, 감독, 장르, 영화 이름을 JSON 매핑 파일로부터 로드
+  - `SentenceTransformer (all-MiniLM-L6-v2)`를 사용해 텍스트 임베딩 생성
+  - FAISS Index에 저장 후 사용자 쿼리 임베딩과 최근접 탐색 수행
+  - 철자 오류나 표현 차이가 있어도 가장 유사한 엔티티를 안정적으로 매핑
 
 - **사실 기반 검색**
-  - ✅ Cypher 쿼리 생성 및 실행  
-  - ✅ 결과 파싱 후 답변 생성  
+  - Cypher 쿼리 생성 및 실행  
+  - 결과 파싱 후 답변 생성  
 
 - **개인화 추천**
-  - ✅ **유저 Query → Preference 추출 및 Cypher 수행**  
+  ![System Overview](./images/personalized_recommendation.png)
+  - **유저 Query → Preference 추출 및 Cypher 수행**  
     - 사용자 입력에서 배우, 감독, 장르, 영화 키워드를 추출  
     - 추출된 키워드를 내부 매핑 자산과 비교해 정제  
       - `find_best_name` (텍스트 임베딩 기반 근접 탐색)으로 철자 오류 보정  
       - `genre_mapper_chain` (LLM 기반)으로 장르 의미를 매핑  
     - 정제된 preference를 기반으로 Cypher 쿼리 생성 → Neo4j에서 후보 영화 조회  
 
-  - ✅ **FAISS 기반 후보 확장**  
+  - **FAISS 기반 후보 확장**  
     - 조회된 영화 후보들을 global GNN 그래프(`global_graph_nx`)에 매핑  
     - `extract_subgraph_from_global`  
       - Seed 영화 노드 선정 (degree 기반 Top-K, 랜덤, embedding 유사도 기반)  
       - 후보 영화들 간 **shortest path**를 연결하여 최소 서브그래프 생성  
     - 해당 subgraph를 PyTorch Geometric 데이터 객체로 변환  
 
-  - ✅ **GAT Attention 기반 노드 중요도 추출**  
+  - **GAT Attention 기반 노드 중요도 추출**  
     - `run_gat_model`을 통해 **GATRanker** 실행  
     - subgraph 내 각 노드의 **attention score** 산출  
     - Attention score는 "이 노드가 현재 사용자 preference 맥락에서 얼마나 중요한가"를 의미  
 
-  - ✅ **품질 지표(평점 + 인기도) 결합**  
+  - **품질 지표(평점 + 인기도) 결합**  
     - `fetch_movie_quality_scores_from_nodes`로 영화별  
       - 평균 평점(`avg_rating`)  
       - 평점 개수(`rating_count`) 조회  
@@ -89,11 +86,11 @@
       - `quality_score`: (평균 평점 정규화 + 평점 수 정규화)  
       - `α=0.7, β=0.3` → GAT 기반 중요도에 더 높은 가중치  
 
-  - ✅ **영화 설명(overview) 보강**  
+  - **영화 설명(overview) 보강**  
     - `fetch_movie_overviews`로 최종 후보의 제목과 줄거리(overview) 조회  
     - `enrich_movies_with_overview`로 결과 아이템을 메타데이터와 함께 보강  
 
-  - ✅ **최종 추천**  
+  - **최종 추천**  
     - Attention × 품질 기반으로 rerank된 영화 중 상위 Top-K (`top_k=5`)를 반환  
 
 
@@ -101,9 +98,9 @@
 
 ### **Phase 3: 애플리케이션 & 배포**
 - **UI (Gradio)**
-  - ✅ Gradio Chatbot UI 구현  
-  - ✅ 초기 인사말 메시지 기능 추가  
-  - ✅ 백엔드 검색 로직과 연동  
+  - Gradio Chatbot UI 구현  
+  - 초기 인사말 메시지 기능 추가  
+  - 백엔드 검색 로직과 연동  
 
   *예시: "Who directed Interstellar?" → 감독 정보를 직접 반환*  
   <p align="center">
@@ -118,8 +115,8 @@
   
 
 - **개선 작업**
-  - ✅ 추천 랭킹 개선 (관련성 × 정규화된 평점/인기도 결합)  
-  - ✅ “관련성 + 적정 인기” 균형 달성  
+  - 추천 랭킹 개선 (관련성 × 정규화된 평점/인기도 결합)  
+  - “관련성 + 적정 인기” 균형 달성  
 
 ---
 
