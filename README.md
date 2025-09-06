@@ -105,10 +105,12 @@
   - ✅ 초기 인사말 메시지 기능 추가  
   - ✅ 백엔드 검색 로직과 연동
   
-  ![Gradio Demo](./images/gradio_ui.png)
-  ![Gradio Demo](./images/gradio_fact.png)
-  ![Gradio Demo](./images/gradio_per_01.png)
-  ![Gradio Demo](./images/gradio_per_02.png)
+  ![Fact-based Demo](./images/gradio_fact.png)  
+  *예시: "Who directed Interstellar?" → 감독 정보를 직접 반환*
+  
+  ![Personalized Demo 1](./images/gradio_per_01.png)  
+  ![Personalized Demo 2](./images/gradio_per_02.png)  
+  *예시: "Recommend me some sci-fi movies that came out in 2010's" → 2010년대 SF 영화 추천*
 
 - **개선 작업**
   - ✅ 추천 랭킹 개선 (관련성 × 정규화된 평점/인기도 결합)  
