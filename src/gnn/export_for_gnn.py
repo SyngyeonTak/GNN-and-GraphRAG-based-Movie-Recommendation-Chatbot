@@ -39,7 +39,7 @@ def export_graph_data_to_file():
             ('Movie', 'HAS_GENRE', 'Genre'),
             ('Actor', 'ACTED_IN', 'Movie'), 
             ('Director', 'DIRECTED', 'Movie'),
-            ('User', 'RATED', 'Movie')   # ✅ User → Movie 관계 추가
+            ('User', 'RATED', 'Movie')   
         ]
         edge_indices = {}
         for src_type, rel_type, dst_type in edge_definitions:

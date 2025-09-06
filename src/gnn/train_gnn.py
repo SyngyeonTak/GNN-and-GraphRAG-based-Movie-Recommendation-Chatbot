@@ -23,11 +23,8 @@ NUM_LAYERS = 2
 NUM_HEADS = 4
 EPOCHS = 30
 LEARNING_RATE = 0.001
-# NEW: Mini-batching hyperparameters
 BATCH_SIZE = 2048
-# Define the number of neighbors to sample for each layer. -1 means all neighbors.
-# Using a fixed number limits the computation per node.
-NUM_NEIGHBORS = [15, 10] # For 2 layers. e.g., 15 neighbors for the first hop, 10 for the second.
+NUM_NEIGHBORS = [15, 10]
 NODE_TYPES_TO_EMBED = ['movie', 'genre', 'actor', 'director']
 
 DUMP_PATH = './dataset/faiss/'
@@ -80,21 +77,10 @@ class HGAT(nn.Module):
             }, aggr='sum'))
         self.lin = nn.Linear(hidden_channels * num_heads, out_channels)
 
-        # NEW: Create a final linear layer for each node type we want to export
-        #self.output_lins = nn.ModuleDict()
-        #for node_type in node_types_to_embed:
-        #    self.output_lins[node_type] = nn.Linear(hidden_channels * num_heads, out_channels)
-
-        # Modification: To embed different node types in the same space
         self.shared_output_lin = nn.Linear(hidden_channels * num_heads, out_channels)
         self.node_types_to_embed = node_types_to_embed
 
     def forward(self, data):
-        # NOTE: When using NeighborLoader, the input 'data' is a batch (subgraph).
-        # The model needs to receive the full node feature set (`x_dict`) to work on.
-        # This forward pass assumes we are passing the full graph features and sampling is done by the loader.
-        # A more advanced implementation might pass x_dict explicitly.
-        # For now, this structure works with how LinkNeighborLoader constructs batches.
         x_dict = {
             node_type: self.node_embeds[node_type](data[node_type].node_id)
             for node_type in data.node_types
@@ -103,24 +89,16 @@ class HGAT(nn.Module):
             x_dict = conv(x_dict, data.edge_index_dict)
             x_dict = {key: F.leaky_relu(x) for key, x in x_dict.items()}
 
-        # CHANGED: Apply the final linear layer to each specified node type
         final_embeddings = {}
-        #for node_type, lin_layer in self.output_lins.items():
-        #    if node_type in x_dict:
-        #        final_embeddings[node_type] = lin_layer(x_dict[node_type])
-
-        # Modification: To embed different node types in the same space
         for node_type in self.node_types_to_embed:
             if node_type in x_dict:
-                # 각 타입의 GNN 출력에 대해 '동일한' 선형 레이어를 적용
                 final_embeddings[node_type] = self.shared_output_lin(x_dict[node_type])
 
-        #return self.lin(x_dict['movie']), x_dict
         return final_embeddings, x_dict
 
 
 class Decoder(nn.Module):
-    # it returs the prob(similarity) of link between two nodes based on the final embeddings
+    
     def __init__(self, hidden_channels, num_heads):
         super().__init__()
         self.input_dim = hidden_channels * num_heads
@@ -130,27 +108,21 @@ class Decoder(nn.Module):
         movie_embed = z_dict['movie'][edge_label_index[1]]
         return (user_embed * movie_embed).sum(dim=-1)
 
-# MODIFIED: The train function is now simpler. It uses `edge_label` from the loader.
 def train(model, decoder, batch, optimizer):
     model.train(); decoder.train()
     optimizer.zero_grad()
     
-    # The model now returns final_embeddings, z_dict. We only need z_dict for the decoder.
     _, z_dict = model(batch)
 
-    # Get predictions for all edges (positive and negative) in the batch
     out = decoder(z_dict, batch['user', 'rated', 'movie'].edge_label_index)
     
-    # Get the ground truth labels (1s for positive, 0s for negative)
     ground_truth = batch['user', 'rated', 'movie'].edge_label
     
-    # Calculate loss with all predictions and ground truths at once
     loss = F.binary_cross_entropy_with_logits(out, ground_truth)
     loss.backward()
     optimizer.step()
     return float(loss)
 
-# MODIFIED: The test function is also simpler, using the loader's `edge_label`.
 @torch.no_grad()
 def test(model, decoder, loader, device):
     model.eval(); decoder.eval()
@@ -172,14 +144,11 @@ def test(model, decoder, loader, device):
     
     return roc_auc_score(final_ground_truths, final_preds)
 
-# --- NEW: Function to generate and save embeddings with FAISS ---
 def generate_and_save_embeddings(model, data, node_names, node_types_to_save):
     """Generates final movie embeddings and saves them using FAISS."""
     print("\n--- Generating and Saving Final Embeddings ---")
     model.eval()
     with torch.no_grad():
-        # Get final movie embeddings from the trained model
-        #movie_embeddings, _ = model(data)
         final_embeddings_dict, _ = model(data)
         
         for node_type in node_types_to_save:
@@ -187,24 +156,19 @@ def generate_and_save_embeddings(model, data, node_names, node_types_to_save):
                 print(f"Warning: Node type '{node_type}' not found in model output. Skipping.")
                 continue
             
-            # Move embeddings to CPU and convert to NumPy array
             print(f"\nProcessing embeddings for node type: '{node_type}'")
             embeddings = final_embeddings_dict[node_type]
             embeddings_np = embeddings.cpu().detach().numpy()
 
-            # 1. Build the FAISS index
-            #print(f"Building FAISS index for {movie_embeddings_np.shape[0]} movies with dimension {OUT_CHANNELS}...")
             print(f"Building FAISS index for {embeddings_np.shape[0]} '{node_type}' nodes with dimension {OUT_CHANNELS}...")
             index = faiss.IndexFlatL2(OUT_CHANNELS)
-            #index.add(movie_embeddings_np)
-            index.add(embeddings_np.astype('float32')) # FAISS expects float32
             
-            # 2. Save the FAISS index to a file
+            index.add(embeddings_np.astype('float32'))
+            
             faiss_index_path = f"{DUMP_PATH}{node_type}_embeddings.faiss"
             faiss.write_index(index, faiss_index_path)
             print(f"FAISS index saved to: {faiss_index_path}")
 
-            # 3. Create and save the mapping from FAISS index to movie title
             
             node_type_capitalized = node_type.capitalize()
             if node_type_capitalized not in node_names:
@@ -213,7 +177,6 @@ def generate_and_save_embeddings(model, data, node_names, node_types_to_save):
 
             titles = node_names[node_type_capitalized]
 
-            # The PyG data loader preserves the order, so the i-th embedding corresponds to the i-th movie title
             idx_to_name = {i: title for i, title in enumerate(titles)}
             
             mapping_path = f"{DUMP_PATH}{node_type}_mapping.json"
@@ -221,9 +184,7 @@ def generate_and_save_embeddings(model, data, node_names, node_types_to_save):
                 json.dump(idx_to_name, f, ensure_ascii=False, indent=4)
             print(f"Index-to-name mapping saved to: {mapping_path}")
 
-# --- 5. Main Execution Block ---
 def main():
-    """Main execution function."""
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
@@ -243,15 +204,11 @@ def main():
     )
     train_data, val_data, test_data = transform(graph_data)
 
-    # --- MODIFIED: DataLoaders now handle negative sampling on-the-fly ---
-    print("\nCreating mini-batch loaders with on-the-fly negative sampling...")
-    # make subgraphs to train it in mini batches
     train_loader = LinkNeighborLoader(
         data=train_data,
         num_neighbors=NUM_NEIGHBORS,
         edge_label_index=(('user', 'rated', 'movie'), train_data['user', 'rated', 'movie'].edge_label_index),
-        # Let the loader sample negative edges automatically
-        neg_sampling_ratio=1.0, # Sample 1 negative edge for each positive edge
+        neg_sampling_ratio=1.0,
         batch_size=BATCH_SIZE,
         shuffle=True
     )
@@ -278,11 +235,10 @@ def main():
     decoder = Decoder(HIDDEN_CHANNELS, NUM_HEADS).to(device)
     optimizer = torch.optim.Adam(list(model.parameters()) + list(decoder.parameters()), lr=LEARNING_RATE)
     
-    # Training loop now uses the refactored functions
     print("\nStarting model training with mini-batches...")
     for epoch in range(1, EPOCHS + 1):
         total_loss = 0
-        model.train() # Set model to training mode
+        model.train()
         for batch in tqdm(train_loader, desc=f"Epoch {epoch:03d}"):
             loss = train(model, decoder, batch.to(device), optimizer)
             total_loss += loss

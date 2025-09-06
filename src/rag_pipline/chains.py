@@ -162,10 +162,14 @@ def get_query_router_chain(llm):
 
 def get_cypher_generation_chain(llm):
     """
-    Stable Cypher generation chain.
-    - When the question is about a specific movie, return only movie properties.
-    - Enforce DISTINCT and relationship directions.
-    - Avoid unnecessary expansions unless explicitly requested.
+    Stable Cypher generation chain (simplified).
+
+    - Cypher should always return minimal information:
+    * Specific Movie → m.movieId, m.title, m.overview, m.year
+    * Specific Actor/Director → only return related Movies
+    * Genre queries should follow the same rule
+    - "similar" / "related" type queries should NOT be handled in Cypher.
+    These will be processed in the application layer (embeddings, filtering, re-ranking).
     """
     cypher_examples = [
         {
@@ -207,8 +211,8 @@ def get_cypher_generation_chain(llm):
         - If the question is about a specific movie from preferences,
           generate ONLY a query that MATCHes that Movie node and RETURN its properties:
             m.movieId, m.title, m.overview, m.year (Never return only m.)
-        - Do NOT add related movies, Genre nodes, or any other expansions 
-          unless the user explicitly asks for "similar" or "related movies".
+        - Do NOT generate queries that fetch "similar" or "related" movies.
+            (These will be handled by recommendation logic outside of Cypher.)
         - For Actor, Director, or Genre queries, you may traverse their relationships.
         - Always use standard property syntax like {{property: 'value'}}.
         - Assume relationship directions:

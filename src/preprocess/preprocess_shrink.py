@@ -80,4 +80,4 @@ sampled_ratings.insert(0, "rating_id", sampled_ratings.index + 1)
 movies_filtered.to_csv(OUTPUT_PATH + "movies_filtered.csv", index=False)
 sampled_ratings.to_csv(OUTPUT_PATH + "ratings_filtered.csv", index=False)
 
-print("✅ movies_filtered.csv / ratings_filtered.csv 저장 완료 (ID 1부터 시작)")
+print("movies_filtered.csv / ratings_filtered.csv 저장 완료 (ID 1부터 시작)")

@@ -25,7 +25,7 @@ def save_mapping(node_type, node_names):
 if __name__ == "__main__":
     node_names = load_node_names()
 
-    # snapshot에 들어있는 key들은 "Movie", "Actor", "Genre", "Director" 같은 형태일 가능성이 높음
+
     for node_type_capitalized, names in node_names.items():
-        node_type = node_type_capitalized.lower()  # 소문자로 파일명 저장
+        node_type = node_type_capitalized.lower()
         save_mapping(node_type, names)

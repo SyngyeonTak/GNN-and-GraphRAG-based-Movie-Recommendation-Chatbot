@@ -34,7 +34,7 @@ def find_cross_type_similarity(source_type, source_name, target_type):
             source_idx_to_name = {int(k): v for k, v in json.load(f).items()}
         print(f"Source ('{source_type}') data loaded successfully.")
     except Exception as e:
-        print(f"🔴 Error loading SOURCE data: {e}")
+        print(f"Error loading SOURCE data: {e}")
         return
 
     # --- 2. 타겟(Target) 데이터 로드 ---
@@ -45,19 +45,19 @@ def find_cross_type_similarity(source_type, source_name, target_type):
             target_idx_to_name = {int(k): v for k, v in json.load(f).items()}
         print(f"Target ('{target_type}') data loaded successfully.")
     except Exception as e:
-        print(f"🔴 Error loading TARGET data: {e}")
+        print(f"Error loading TARGET data: {e}")
         return
 
     # --- 3. 기본 구조 및 차원 검증 ---
     print("\n--- Verifying dimensions ---")
     if source_index.d != target_index.d:
-        print(f"🔴 [CRITICAL ERROR] Vector dimensions do not match!")
+        print(f"[CRITICAL ERROR] Vector dimensions do not match!")
         print(f"Source ('{source_type}') dimension: {source_index.d}")
         print(f"Target ('{target_type}') dimension: {target_index.d}")
         print("Similarity search between these types is not possible.")
         return
     else:
-        print(f"[✔️ SANITY CHECK PASSED] Vector dimensions match: {source_index.d}")
+        print(f"[SANITY CHECK PASSED] Vector dimensions match: {source_index.d}")
 
     # --- 4. 소스 벡터 추출 및 교차 유사도 검색 ---
     print(f"\n--- Performing cross-similarity search ---")
@@ -82,9 +82,9 @@ def find_cross_type_similarity(source_type, source_name, target_type):
             print(f"{i+1:2d}. {similar_name:<40} (Distance: {similarity_score:.4f})")
 
     except KeyError:
-        print(f"\n[⚠️ WARNING] Source item '{source_name}' not found in the '{source_type}' mapping file.")
+        print(f"\n[WARNING] Source item '{source_name}' not found in the '{source_type}' mapping file.")
     except Exception as e:
-        print(f"\n[🔴 ERROR] An error occurred during search: {e}")
+        print(f"\n[ERROR] An error occurred during search: {e}")
 
 
 if __name__ == "__main__":

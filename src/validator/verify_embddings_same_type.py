@@ -30,7 +30,7 @@ def verify_single_embedding(node_type, target_name):
         print(f"Number of vectors in index: {index.ntotal}")
         print(f"Vector dimension: {index.d}")
     except Exception as e:
-        print(f"🔴 Error loading FAISS index: {e}")
+        print(f"Error loading FAISS index: {e}")
         return
 
     # --- 2. 매핑 파일 로드 ---
@@ -42,14 +42,14 @@ def verify_single_embedding(node_type, target_name):
             idx_to_name = {int(k): v for k, v in idx_to_name.items()}
         print(f"Mapping loaded successfully. Total items: {len(idx_to_name)}")
     except Exception as e:
-        print(f"🔴 Error loading mapping file: {e}")
+        print(f"Error loading mapping file: {e}")
         return
 
     # --- 3. 기본 구조 검증 ---
     if index.ntotal != len(idx_to_name):
-        print("\n[🔴 CRITICAL ERROR] The number of vectors in FAISS and items in the mapping do not match!")
+        print("\n[CRITICAL ERROR] The number of vectors in FAISS and items in the mapping do not match!")
     else:
-        print("\n[✔️ SANITY CHECK PASSED] Index and mapping counts match.")
+        print("\n[SANITY CHECK PASSED] Index and mapping counts match.")
 
     # --- 4. 유사도 검색 테스트 ---
     print(f"\n--- Performing similarity search for: '{target_name}' ---")
@@ -74,9 +74,9 @@ def verify_single_embedding(node_type, target_name):
             print(f"{i+1:2d}. {similar_name:<40} (Distance: {similarity_score:.4f})")
             
     except KeyError:
-        print(f"\n[⚠️ WARNING] Item '{target_name}' not found in the mapping file.")
+        print(f"\n[WARNING] Item '{target_name}' not found in the mapping file.")
     except Exception as e:
-        print(f"\n[🔴 ERROR] An error occurred during search: {e}")
+        print(f"\n[ERROR] An error occurred during search: {e}")
 
 if __name__ == "__main__":
     # 설정된 모든 타겟에 대해 검증 루프 실행

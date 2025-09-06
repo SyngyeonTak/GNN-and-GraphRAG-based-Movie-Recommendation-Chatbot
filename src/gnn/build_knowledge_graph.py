@@ -44,8 +44,7 @@ def clear_database(conn):
     """Deletes all nodes and relationships in the database using batches to avoid memory issues."""
     print("Initializing the database (using batch deletion)...")
     
-    # This query repeatedly finds 10,000 nodes, detaches and deletes them,
-    # until no nodes are left. This avoids loading everything into memory at once.
+
     delete_query = """
     CALL apoc.periodic.iterate(
       'MATCH (n) RETURN id(n) AS id',
@@ -212,7 +211,7 @@ def main():
     # Close the connection
     conn.close()
     
-    print("\n✅ All data has been successfully imported into Neo4j.")
+    print("\nAll data has been successfully imported into Neo4j.")
 
 
 if __name__ == "__main__":
