@@ -97,7 +97,7 @@
 
 ---
 
-### **Phase 3: 애플리케이션 & 배포**
+### **Phase 3: 애플리케이션**
 - **UI (Gradio)**
   - Gradio Chatbot UI 구현  
   - 초기 인사말 메시지 기능 추가  
