@@ -1,6 +1,6 @@
 # 🎬 GNN & GraphRAG 기반 영화 추천 챗봇
 
-> Neo4j (GraphRAG) + GNN + LLM 기반으로 사실 기반 검색과 Reranking 기반 추천을 결합한 영화 추천 챗봇
+> Neo4j (GraphRAG) + GNN + LLM 기반 영화 추천 챗봇
 
 ---
 
@@ -21,7 +21,6 @@
   - 관계: `RATED`, `HAS_GENRE`, `ACTED_IN`, `DIRECTED`  
 
 - **GNN 추천 모델 학습**
-  ![System Overview](./images/gnn_architecture.png)
   - Neo4j 지식 그래프 데이터를 PyTorch Geometric (PyG) 객체로 변환  
   - **Heterogeneous Graph Attention Network (HGAT)** 노드 임베딩 학습
   - **FAISS**에 노드 임베딩 저장 (유사도 검색)  
@@ -37,23 +36,21 @@
   - Fact-based Response → Cypher 쿼리 결과를 사람이 읽기 쉬운 문장으로 답변  
   - Chit-chat Response → 가벼운 대화, 인사말, off-topic 메시지 대응  
 
-- **personalized (Reranking) 추천**
+- **Personalized Response Chain**
   ![System Overview](./images/personalized_recommendation_01.png)
   ![System Overview](./images/personalized_recommendation_02.png)
-  - **유저 Query → Preference 추출 및 Cypher 수행**  
+  - **유저 Preference 추출 후 Cypher 수행**  
     - 사용자 입력에서 배우, 감독, 장르, 영화 키워드를 추출  
-    - 추출된 키워드와 노드들의 이름과 비교 후 100% 매칭 시킴  
-    - 정제된 preference를 기반으로 Cypher 쿼리 생성 → Neo4j에서 후보 영화 조회  
+    - 정제된 키워드를 기반으로 Cypher 쿼리 생성 → Neo4j에서 후보 영화 추출  
 
   - **추천 영화 확장**  
-    - cyper에서 가지고 온 후보 영화들의 shortest path를 기반으로 subgraph 생성  
+    - Neo4j에서 가지고 온 후보 영화들 간의 shortest path를 기반으로 Recommendation subgraph 생성  
     
   - **GAT Attention 기반 노드 attention score 추출**  
-    - subgraph 내의 노드 **attention score** 산출  
+    - subgraph 내의 모든 노드 **attention score** 산출  
     - Attention score는 "이 노드가 현재 사용자 preference 맥락에서 얼마나 중요한가"를 의미  
 
-  - **품질 지표(평점 + 인기도) 결합**  
-    - 영화별 평균 평점(`avg_rating`) 평점 개수(`rating_count`) 조회  
+  - **추천 점수 생성**    
     - 추천 점수 결합:  
       - `final_score = α * attention_score + β * quality_score`
       - `attention_score`: GAT 모델에서 학습된 중요도  
@@ -61,8 +58,7 @@
       - `α=0.7, β=0.3` → GAT 기반 중요도에 더 높은 가중치  
 
   - **최종 추천**  
-    - 최종 후보 영화의 제목과 줄거리를 기반으로 최종 추천  
-
+    - 후보 영화의 overview를 기반으로 최종 추천  
 ---
 
 ### **Phase 3: 애플리케이션**
