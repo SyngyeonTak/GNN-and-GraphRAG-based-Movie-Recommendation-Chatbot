@@ -1,6 +1,6 @@
 # 🎬 GNN & GraphRAG 기반 영화 추천 챗봇
 
-> Neo4j (GraphRAG) + GNN + LLM 기반으로 사실 기반 검색과 개인화 추천을 결합한 영화 추천 챗봇
+> Neo4j (GraphRAG) + GNN + LLM 기반으로 사실 기반 검색과 Reranking 기반 추천을 결합한 영화 추천 챗봇
 
 ---
 
@@ -55,7 +55,7 @@
   - Cypher 쿼리 생성 및 실행  
   - 결과 파싱 후 답변 생성  
 
-- **개인화 추천**
+- **Reranking 추천**
   ![System Overview](./images/personalized_recommendation_01.png)
   ![System Overview](./images/personalized_recommendation_02.png)
   - **유저 Query → Preference 추출 및 Cypher 수행**  
