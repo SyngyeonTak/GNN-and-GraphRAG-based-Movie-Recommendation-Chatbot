@@ -31,18 +31,11 @@
 ### **Phase 2: LLM 통합 & RAG**
 - 챗봇 서비스를 위한 LLM Agent 구현
 - **LLM main Chains**
-  - Query Router → 사용자의 입력을 `fact(사실 기반 답변)`, `personalized(개인 추천 답변)`, `chit_chat (잡담)` 중 하나로 분류    
+  - hybrid Router → 사용자의 입력을 `fact(사실 기반 답변)`, `personalized(개인 추천 답변)`, `chit_chat (잡담)` 중 하나로 분류    
   - Cypher Generator → Neo4j에 실행할 Cypher 쿼리 생성  
   - Personalized Response → GNN 임베딩 기반 후보 영화 + 영화 평점을 결합해 자연스러운 추천 문장 생성  
   - Fact-based Response → Cypher 쿼리 결과를 사람이 읽기 쉬운 문장으로 답변  
   - Chit-chat Response → 가벼운 대화, 인사말, off-topic 메시지 대응  
-
-- **하이브리드 검색기**
-  - 쿼리 라우터 (fact / personalized / chit-chat 분류)   
-
-- **사실 기반 검색**
-  - 영화 사실에 대한 질문 (e.g. "크리스토퍼 놀란이 감독한 영화 뭐 있어?")이 들어올 시 neo4j DB에서 결과를 가져옴
-  - Cypher 쿼리 생성 및 실행  
 
 - **personalized (Reranking) 추천**
   ![System Overview](./images/personalized_recommendation_01.png)
@@ -55,9 +48,8 @@
   - **추천 영화 확장**  
     - cyper에서 가지고 온 후보 영화들의 shortest path를 기반으로 subgraph 생성  
     
-  - **GAT Attention 기반 노드 중요도 추출**  
-    - **GATRanker** 실행  
-    - subgraph 내 각 노드의 **attention score** 산출  
+  - **GAT Attention 기반 노드 attention score 추출**  
+    - subgraph 내의 노드 **attention score** 산출  
     - Attention score는 "이 노드가 현재 사용자 preference 맥락에서 얼마나 중요한가"를 의미  
 
   - **품질 지표(평점 + 인기도) 결합**  
@@ -65,11 +57,11 @@
     - 추천 점수 결합:  
       - `final_score = α * attention_score + β * quality_score`
       - `attention_score`: GAT 모델에서 학습된 중요도  
-      - `quality_score`: (평균 평점 정규화 + 평점 수 정규화)  
+      - `quality_score`: 평균 평점과 평점 수를 각각 정규화 하여 합산   
       - `α=0.7, β=0.3` → GAT 기반 중요도에 더 높은 가중치  
 
   - **최종 추천**  
-    - 최종 후보 영화의 제목과 줄거리를 기반으로 죄종 추천  
+    - 최종 후보 영화의 제목과 줄거리를 기반으로 최종 추천  
 
 ---
 
