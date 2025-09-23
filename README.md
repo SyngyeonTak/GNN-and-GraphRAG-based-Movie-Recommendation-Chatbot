@@ -19,81 +19,62 @@
 - **지식 그래프 구축 (Neo4j)**
   - 노드: `Movie`, `User`, `Genre`, `Actor`, `Director`  
   - 관계: `RATED`, `HAS_GENRE`, `ACTED_IN`, `DIRECTED`  
-  - Neo4j Browser에서 Cypher 쿼리 검증 완료  
 
 - **GNN 추천 모델 학습**
   ![System Overview](./images/gnn_architecture.png)
-  - 그래프 데이터를 PyTorch Geometric (PyG) 객체로 변환  
-  - **Heterogeneous Graph Attention Network (HGAT)** 구현  
-  - 학습 파이프라인 구축 및 손실 수렴 확인   
+  - Neo4j 지식 그래프 데이터를 PyTorch Geometric (PyG) 객체로 변환  
+  - **Heterogeneous Graph Attention Network (HGAT)** 노드 임베딩 학습
   - **FAISS**에 노드 임베딩 저장 (유사도 검색)  
-  - `genre`, `actor`, `director`, `user` 임베딩 추가 (LLM preference 반영)  
-  - 노드 타입별 출력 레이어 공유 (임베딩 공간 정렬)  
 
 ---
 
 ### **Phase 2: LLM 통합 & RAG**
+- 챗봇 서비스를 위한 LLM Agent 구현
 - **LLM main Chains**
-  - Query Router → 사용자의 입력을 `fact_based_search`, `personalized_recommendation`, `chit_chat` 중 하나로 분류    
-  - Cypher Generator → Neo4j에 실행할 Cypher 쿼리 생성 (사실 기반 검색용)  
-  - Personalized Response → GNN 기반 후보 영화 + 사용자 선호도를 결합해 자연스러운 추천 문장 생성  
+  - Query Router → 사용자의 입력을 `fact`, `personalized`, `chit_chat` 중 하나로 분류    
+  - Cypher Generator → Neo4j에 실행할 Cypher 쿼리 생성  
+  - Personalized Response → GNN 임베딩 기반 후보 영화 + 영화 평점을 결합해 자연스러운 추천 문장 생성  
   - Fact-based Response → Cypher 쿼리 결과를 사람이 읽기 쉬운 문장으로 포맷  
   - Chit-chat Response → 가벼운 대화, 인사말, off-topic 메시지 대응  
 
 - **하이브리드 검색기**
   - 쿼리 라우터 (fact / personalized / chit-chat 분류)  
   - Zero-shot 프롬프트 기반 라우팅  
-  - 상태 기반 통합 검색 로직 구축
- 
+  
 - **엔티티 텍스트 매칭**
-  - 배우, 감독, 장르, 영화 이름을 JSON 매핑 파일로부터 로드
   - `SentenceTransformer (all-MiniLM-L6-v2)`를 사용해 텍스트 임베딩 생성
   - FAISS Index에 저장 후 사용자 쿼리 임베딩과 최근접 탐색 수행
   - 철자 오류나 표현 차이가 있어도 가장 유사한 엔티티를 안정적으로 매핑
 
 - **사실 기반 검색**
   - Cypher 쿼리 생성 및 실행  
-  - 결과 파싱 후 답변 생성  
 
 - **Reranking 추천**
   ![System Overview](./images/personalized_recommendation_01.png)
   ![System Overview](./images/personalized_recommendation_02.png)
   - **유저 Query → Preference 추출 및 Cypher 수행**  
     - 사용자 입력에서 배우, 감독, 장르, 영화 키워드를 추출  
-    - 추출된 키워드를 내부 매핑 자산과 비교해 정제  
-      - `find_best_name` (텍스트 임베딩 기반 근접 탐색)으로 철자 오류 보정  
-      - `genre_mapper_chain` (LLM 기반)으로 장르 의미를 매핑  
+    - 추출된 키워드와 노드들의 이름과 비교 후 100% 매칭 시킴  
     - 정제된 preference를 기반으로 Cypher 쿼리 생성 → Neo4j에서 후보 영화 조회  
 
-  - **FAISS 기반 후보 확장**  
-    - 조회된 영화 후보들을 global GNN 그래프(`global_graph_nx`)에 매핑  
-    - `extract_subgraph_from_global`  
-      - Seed 영화 노드 선정 (degree 기반 Top-K, 랜덤, embedding 유사도 기반)  
-      - 후보 영화들 간 **shortest path**를 연결하여 최소 서브그래프 생성  
-    - 해당 subgraph를 PyTorch Geometric 데이터 객체로 변환  
-
+  - **추천 영화 확장**  
+    - cyper에서 가지고 온 후보 영화들의 shortest path를 기반으로 subgraph 생성  
+    
   - **GAT Attention 기반 노드 중요도 추출**  
-    - `run_gat_model`을 통해 **GATRanker** 실행  
+    - **GATRanker** 실행  
     - subgraph 내 각 노드의 **attention score** 산출  
     - Attention score는 "이 노드가 현재 사용자 preference 맥락에서 얼마나 중요한가"를 의미  
 
   - **품질 지표(평점 + 인기도) 결합**  
-    - `fetch_movie_quality_scores_from_nodes`로 영화별  
-      - 평균 평점(`avg_rating`)  
-      - 평점 개수(`rating_count`) 조회  
-    - `rank_movies_by_attention`에서 점수 결합:  
+    - 영화별 평균 평점(`avg_rating`) 평점 개수(`rating_count`) 조회  
+    - 추천 점수 결합:  
       - `final_score = α * attention_score + β * quality_score`
       - `attention_score`: GAT 모델에서 학습된 중요도  
       - `quality_score`: (평균 평점 정규화 + 평점 수 정규화)  
       - `α=0.7, β=0.3` → GAT 기반 중요도에 더 높은 가중치  
 
-  - **영화 설명(overview) 보강**  
-    - `fetch_movie_overviews`로 최종 후보의 제목과 줄거리(overview) 조회  
-    - `enrich_movies_with_overview`로 결과 아이템을 메타데이터와 함께 보강  
-
   - **최종 추천**  
-    - Attention × 품질 기반으로 rerank된 영화 중 상위 Top-K (`top_k=5`)를 반환  
-
+    - 최종 후보 영화의 제목과 줄거리를 기반으로 죄종 추천  
 
 ---
 
