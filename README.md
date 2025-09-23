@@ -20,45 +20,41 @@
   - 노드: `Movie`, `User`, `Genre`, `Actor`, `Director`  
   - 관계: `RATED`, `HAS_GENRE`, `ACTED_IN`, `DIRECTED`  
 
-- **GNN 추천 모델 학습**
+- **GNN 모델 임베딩 학습 및 FAISS 벡터 db 구축**
   - Neo4j 지식 그래프 데이터를 PyTorch Geometric (PyG) 객체로 변환  
-  - **Heterogeneous Graph Attention Network (HGAT)** 노드 임베딩 학습
-  - **FAISS**에 노드 임베딩 저장 (유사도 검색)  
+  - Heterogeneous Graph Attention Network (HGAT) 노드 임베딩 학습
+  - FAISS에 노드 임베딩 저장 (유사도 검색)  
 
 ---
 
 ### **Phase 2: LLM 통합 & RAG**
 - 챗봇 서비스를 위한 LLM Agent 구현
 - **LLM main Chains**
-  - hybrid Router → 사용자의 입력을 `fact(사실 기반 답변)`, `personalized(개인 추천 답변)`, `chit_chat (잡담)` 중 하나로 분류    
+  - Hybrid Router → 사용자의 입력을 `fact(사실 기반 답변)`, `personalized(개인 추천 답변)`, `chit_chat (잡담)` 중 하나로 분류    
   - Cypher Generator → Neo4j에 실행할 Cypher 쿼리 생성  
-  - Personalized Response → GNN 임베딩 기반 후보 영화 + 영화 평점을 결합해 자연스러운 추천 문장 생성  
+  - **Personalized Response** → GNN 임베딩 기반 후보 영화 + 영화 평점을 결합해 자연스러운 추천 문장 생성  
   - Fact-based Response → Cypher 쿼리 결과를 사람이 읽기 쉬운 문장으로 답변  
   - Chit-chat Response → 가벼운 대화, 인사말, off-topic 메시지 대응  
 
-- **Personalized Response Chain**
+- **personalized(개인 추천 답변) 로직**
   ![System Overview](./images/personalized_recommendation_01.png)
   ![System Overview](./images/personalized_recommendation_02.png)
-  - **유저 Preference 추출 후 Cypher 수행**  
+  - **Cypher 수행**  
     - 사용자 입력에서 배우, 감독, 장르, 영화 키워드를 추출  
     - 정제된 키워드를 기반으로 Cypher 쿼리 생성 → Neo4j에서 후보 영화 추출  
 
   - **추천 영화 확장**  
     - Neo4j에서 가지고 온 후보 영화들 간의 shortest path를 기반으로 Recommendation subgraph 생성  
     
-  - **GAT Attention 기반 노드 attention score 추출**  
-    - subgraph 내의 모든 노드 **attention score** 산출  
-    - Attention score는 "이 노드가 현재 사용자 preference 맥락에서 얼마나 중요한가"를 의미  
-
-  - **추천 점수 생성**    
-    - 추천 점수 결합:  
-      - `final_score = α * attention_score + β * quality_score`
+  - **GAT Attention 기반 추천 점수 생성**  
+    - Subgraph 내 모든 노드에 대해 attention score를 산출 
+    - Attention score와 품질 기반 점수를 결합해 최종 추천 점수를 계산:  
+      - `final_score = α * attention_score + β * quality_score`  
       - `attention_score`: GAT 모델에서 학습된 중요도  
-      - `quality_score`: 평균 평점과 평점 수를 각각 정규화 하여 합산   
-      - `α=0.7, β=0.3` → GAT 기반 중요도에 더 높은 가중치  
+      - `quality_score`: 평균 평점과 평점 수를 정규화 후 합산  
 
   - **최종 추천**  
-    - 후보 영화의 overview를 기반으로 최종 추천  
+    - LLM Chain에 추천 영화의 overview를 기반으로 답변 생성   
 ---
 
 ### **Phase 3: 애플리케이션**
