@@ -31,25 +31,20 @@
 ### **Phase 2: LLM 통합 & RAG**
 - 챗봇 서비스를 위한 LLM Agent 구현
 - **LLM main Chains**
-  - Query Router → 사용자의 입력을 `fact`, `personalized`, `chit_chat` 중 하나로 분류    
+  - Query Router → 사용자의 입력을 `fact(사실 기반 답변)`, `personalized(개인 추천 답변)`, `chit_chat (잡담)` 중 하나로 분류    
   - Cypher Generator → Neo4j에 실행할 Cypher 쿼리 생성  
   - Personalized Response → GNN 임베딩 기반 후보 영화 + 영화 평점을 결합해 자연스러운 추천 문장 생성  
-  - Fact-based Response → Cypher 쿼리 결과를 사람이 읽기 쉬운 문장으로 포맷  
+  - Fact-based Response → Cypher 쿼리 결과를 사람이 읽기 쉬운 문장으로 답변  
   - Chit-chat Response → 가벼운 대화, 인사말, off-topic 메시지 대응  
 
 - **하이브리드 검색기**
-  - 쿼리 라우터 (fact / personalized / chit-chat 분류)  
-  - Zero-shot 프롬프트 기반 라우팅  
-  
-- **엔티티 텍스트 매칭**
-  - `SentenceTransformer (all-MiniLM-L6-v2)`를 사용해 텍스트 임베딩 생성
-  - FAISS Index에 저장 후 사용자 쿼리 임베딩과 최근접 탐색 수행
-  - 철자 오류나 표현 차이가 있어도 가장 유사한 엔티티를 안정적으로 매핑
+  - 쿼리 라우터 (fact / personalized / chit-chat 분류)   
 
 - **사실 기반 검색**
+  - 영화 사실에 대한 질문 (e.g. "크리스토퍼 놀란이 감독한 영화 뭐 있어?")이 들어올 시 neo4j DB에서 결과를 가져옴
   - Cypher 쿼리 생성 및 실행  
 
-- **Reranking 추천**
+- **personalized (Reranking) 추천**
   ![System Overview](./images/personalized_recommendation_01.png)
   ![System Overview](./images/personalized_recommendation_02.png)
   - **유저 Query → Preference 추출 및 Cypher 수행**  
