@@ -124,9 +124,9 @@ def import_ratings_batch(conn, ratings_df, batch_size=1000):
 # -----------------------
 def main():
     load_dotenv()
-    uri = os.getenv("NEO4J_AURA_URI")
-    user = os.getenv("NEO4J_AURA_USER")
-    password = os.getenv("NEO4J_AURA_PASSWORD")
+    uri = os.getenv("NEO4J_URI")
+    user = os.getenv("NEO4J_USER")
+    password = os.getenv("NEO4J_PASSWORD")
 
     conn = Neo4jConnection(uri, user, password)
 

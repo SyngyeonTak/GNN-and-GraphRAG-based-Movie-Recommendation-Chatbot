@@ -16,6 +16,6 @@ guide/
 # IDE
 .idea/
 .vscode/
-
+.cache/
 # virtual env
 syenv/

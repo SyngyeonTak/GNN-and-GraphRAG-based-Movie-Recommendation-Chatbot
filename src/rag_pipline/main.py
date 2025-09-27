@@ -96,18 +96,18 @@ def main():
     print("Chatbot is ready. Starting test conversations...")
     print("=" * 60)
     
-    test_cases_df = pd.read_csv("./dataset/TC/hybrid_test_cases.csv")
-    print(f"Test cases loaded successfully from 'hybrid_test_cases.csv'. Found {len(test_cases_df)} cases.")
+    test_cases = [
+        #{"TestCase_ID": "F-01-1", "User_Input": "Can you recommend me a movie?", "Test_Objective": "Basic recommendation"},
+        #{"TestCase_ID": "F-01-2", "User_Input": "I like action movies.", "Test_Objective": "Extract user preference"},
+        #{"TestCase_ID": "F-01-3", "User_Input": "Recommend me a movie directed by Christopher Nolan.", "Test_Objective": "Director-based recommendation"},
+        {"TestCase_ID": "F-01-4", "User_Input": "Recommend me movie like The Dark Knight.", "Test_Objective": "Movie information retrieval"},
+        {"TestCase_ID": "F-01-5", "User_Input": "Thanks!", "Test_Objective": "Simple chit-chat response"}
+    ]
 
     # Iterate through each test case
-    conversation_state = {}
-    for index, row in test_cases_df.iterrows():
-        test_id = row['TestCase_ID']
-        user_input = str(row['User_Input'])
-
-        # Run only specific test group for now
-        if not test_id.startswith(('F-01')):
-            continue
+    for case in test_cases:
+        test_id = case['TestCase_ID']
+        user_input = str(case['User_Input'])
 
         # Reset conversation state for new scenarios
         if not any(cont in test_id for cont in ['-2', '-3', '-4', '-5']):
@@ -116,7 +116,7 @@ def main():
             print("New Scenario: Conversation state has been reset.")
 
         print(f"--- Running Test: {test_id} ---")
-        print(f"Objective: {row['Test_Objective']}")
+        print(f"Objective: {case['Test_Objective']}")
 
         # Call hybrid retriever
         response = hybrid_retriever(
