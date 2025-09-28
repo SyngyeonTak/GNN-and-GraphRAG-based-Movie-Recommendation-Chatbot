@@ -7,6 +7,8 @@ from langchain_openai import ChatOpenAI
 from langchain_community.graphs import Neo4jGraph
 import pickle
 import networkx as nx
+from fastapi import FastAPI
+import uvicorn
 
 # Import necessary functions
 from chains import (
@@ -83,7 +85,8 @@ def chatbot_response(user_message, chat_history):
     )
     return response
 
-with gr.Blocks(theme="soft") as demo:
+#with gr.Blocks(theme="soft") as demo:
+with gr.Blocks(theme="soft") as gradio_app:    
     gr.Markdown(
         """
         # Movie Recommendation Chatbot
@@ -116,5 +119,16 @@ with gr.Blocks(theme="soft") as demo:
 
     clear.click(clear_chat, None, [chatbot, msg], queue=False)
 
+
+app = FastAPI()
+app = gr.mount_gradio_app(app, gradio_app, path="/chat")
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "message": "Movie Chatbot is running"}
+
+#if __name__ == "__main__":
+#    demo.launch(debug=True)
+
 if __name__ == "__main__":
-    demo.launch(debug=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
