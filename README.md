@@ -14,7 +14,7 @@
   - 배우·감독 정보가 존재하는 영화 중 **평점 수 기준 상위 3,000편**을 선별  
   - User rating은 해당 3,000편을 기준으로 약 **20만 개(200K)** 샘플
   - 데이터 정제
-  - 🔗 [Download Processed Dataset (Google Drive)]([https://drive.google.com/file/d/1PYOmmc4wWMleNUx6AeVUnLVl_CU4QgUw/view?usp=sharing)
+  - 🔗 [Download Processed Dataset (Google Drive)](https://drive.google.com/file/d/1PYOmmc4wWMleNUx6AeVUnLVl_CU4QgUw/view?usp=sharing)
 
 - **지식 그래프 구축 (Neo4j Aura)**
   - 클라우드 기반인 Neo4j Aura를 사용하여 지식 그래프 구축
