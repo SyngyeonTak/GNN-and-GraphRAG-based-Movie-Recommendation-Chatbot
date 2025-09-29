@@ -12,16 +12,17 @@
   - MovieLens 32M 데이터셋 (movies, ratings)  
   - TMDb API 연동으로 배우/감독 메타데이터 수집
   - 배우·감독 정보가 존재하는 영화 중 **평점 수 기준 상위 3,000편**을 선별  
-  - User rating은 해당 3,000편을 기준으로 약 **100만 개(1M)** 샘플
+  - User rating은 해당 3,000편을 기준으로 약 **20만 개(200K)** 샘플
   - 데이터 정제
-  - 🔗 [Download Processed Dataset (Google Drive)](https://drive.google.com/file/d/1NaMZrj6rlykH5yycyVD58pMQWE5dtBXs/view?usp=drive_link)
+  - 🔗 [Download Processed Dataset (Google Drive)]([https://drive.google.com/file/d/1PYOmmc4wWMleNUx6AeVUnLVl_CU4QgUw/view?usp=sharing)
 
-- **지식 그래프 구축 (Neo4j)**
+- **지식 그래프 구축 (Neo4j Aura)**
+  - 클라우드 기반인 Neo4j Aura를 사용하여 지식 그래프 구축
   - 노드: `Movie`, `User`, `Genre`, `Actor`, `Director`  
   - 관계: `RATED`, `HAS_GENRE`, `ACTED_IN`, `DIRECTED`  
 
 - **GNN 모델 임베딩 학습 및 FAISS 벡터 db 구축**
-  - Neo4j 지식 그래프 데이터를 PyTorch Geometric (PyG) 객체로 변환  
+  - Neo4j Aura의 지식 그래프를 PyTorch Geometric (PyG) 객체로 변환  
   - Heterogeneous Graph Attention Network (HGAT) 노드 임베딩 학습
   - FAISS에 노드 임베딩 저장 (유사도 검색)  
 
@@ -59,26 +60,12 @@
 
 ### **Phase 3: 애플리케이션**
 - **UI (Gradio)**
-  - Gradio Chatbot UI 구현  
-  - 초기 인사말 메시지 기능 추가  
-  - 백엔드 검색 로직과 연동  
+  - Gradio 기반 챗봇 UI 구현
 
-  *예시: "Who directed Interstellar?" → 감독 정보를 직접 반환*  
-  <p align="center">
-    <img src="./images/gradio_fact.png" alt="Fact-based Demo" width="600"/>
-  </p>
-
-  *예시: "Recommend me some sci-fi movies" → SF 영화 추천*  
-  <p align="center">
-    <img src="./images/gradio_per_01.png" alt="Personalized Demo 1" width="600"/>
-    <img src="./images/gradio_per_02.png" alt="Personalized Demo 2" width="600"/>
-  </p>
-  
-
-- **개선 작업**
-  - 추천 랭킹 개선 (관련성 × 정규화된 평점/인기도 결합)  
-  - “관련성 + 적정 인기” 균형 달성  
-
+- **클라우드 배포**
+  - AWS 웹 서버 환경 구축
+  - 백엔드 검색 로직(Faiss, Neo4j Aura) 연동
+  - FastAPI를 활용한 웹 추천시스템 서비스화
 ---
 
 ## 🛠️ 기술 스택
@@ -87,46 +74,41 @@
 - **벡터 검색**: FAISS (임베딩 유사도 검색)  
 - **LLM**: OpenAI GPT (라우팅, Cypher 생성, 개인화 답변)  
 - **프레임워크**: LangChain / 커스텀 체인  
-- **UI**: Gradio  
+- **UI**: Gradio
+- **배포**: AWS (클라우드 서버),  FastAPI
 
 ---
 ## 📂 프로젝트 구조
 
 ```text
 src/
-├── gnn/                          # GNN 관련 모듈
-│   ├── build_knowledge_graph.py  # Neo4j 기반 지식 그래프 구축
-│   ├── export_for_gnn.py         # Neo4j 데이터를 GNN 학습용 포맷으로 변환
-│   ├── faiss_mapping.py          # 노드 임베딩 → FAISS 인덱스 매핑
-│   ├── neo4j_utils.py            # Neo4j 연동 유틸리티
-│   └── train_gnn.py              # GNN 학습 및 임베딩 생성
+├── gnn/                                # GNN 관련 모듈
+│   ├── build_knowledge_graph_aura.py   # Neo4j 기반 지식 그래프 구축
+│   ├── export_for_gnn.py               # Neo4j 데이터를 GNN 학습용 포맷으로 변환
+│   ├── faiss_mapping.py                # 노드 임베딩 → FAISS 인덱스 매핑
+│   ├── neo4j_utils.py                  # Neo4j 연동 유틸리티
+│   └── train_gnn.py                    # GNN 학습 및 임베딩 생성
 │
-├── preprocess/                   # 데이터 전처리 모듈
-│   ├── extension_converter.py    # 확장자/형식 변환
-│   ├── preprocess_data_async.py  # 비동기 데이터 전처리
-│   └── preprocess_shrink.py      # 데이터 축소/샘플링 전처리
+├── preprocess/                         # 데이터 전처리 모듈
+│   ├── preprocess_data_async.py        # 비동기 데이터 전처리
+│   └── preprocess_shrink.py            # 데이터 축소/샘플링 전처리
 │
-├── rag_pipeline/                  # RAG 파이프라인 (챗봇 백엔드)
-│   ├── app.py                    # Gradio 앱 실행 진입점
-│   ├── chains.py                 # LangChain 체인 정의
-│   ├── gnn_encoder.py            # GNN 인코더
-│   ├── graph_utils.py            # 그래프 유틸 (NetworkX, Neo4j 헬퍼)
-│   ├── main.py                   # 실행 스크립트
-│   ├── retriever.py              # Hybrid retriever (fact / personalized / chit-chat)
-│   └── utils.py                  # 퍼지 매칭, Cypher 정제 등 유틸 함수
+├── rag_pipeline/                       # RAG 파이프라인 (챗봇 백엔드)
+│   ├── app.py                          # Gradio 앱 실행 진입점
+│   ├── chains.py                       # LangChain 체인 정의
+│   ├── gnn_encoder.py                  # GNN 인코더
+│   ├── graph_utils.py                  # 그래프 유틸 (NetworkX, Neo4j 헬퍼)
+│   ├── main.py                         # 실행 스크립트
+│   ├── retriever.py                    # Hybrid retriever (fact / personalized / chit-chat)
+│   └── utils.py                        # 퍼지 매칭, Cypher 정제 등 유틸 함수
 │
-├── txt_emb/                       # 텍스트 임베딩 관련
-│   └── text_emb.py                # 텍스트 임베딩 추출
-│
-└── validator/                     # 임베딩 검증 모듈
-    ├── verify_embeddings_diff_type.py  # 서로 다른 타입 간 임베딩 검증
-    └── verify_embeddings_same_type.py  # 동일 타입 내 임베딩 검증
+└── txt_emb/                            # 텍스트 임베딩 관련
+    └── text_emb.py                     # 텍스트 임베딩 추출
 ```
 
 ## 💡 주요 기여
 - **이종 그래프 GNN 임베딩**과 **GraphRAG**를 결합한 하이브리드 영화 추천 구현  
-- **라우터 + 리트리버 구조**로 fact/personalized/chit-chat 쿼리 분리 처리  
-- **설명 가능한 추천**: 서브그래프 근거 경로 기반 설명
+- **router + retreiver 구조**로 fact/personalized/chit-chat 쿼리 분리 처리  
 
 ## 📖참고 문헌
 - Wang, X., Ji, H., Shi, C., Wang, B., Ye, Y., Cui, P., & Yu, P. S. (2019).  
