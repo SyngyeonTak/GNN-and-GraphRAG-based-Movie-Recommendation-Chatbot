@@ -89,8 +89,20 @@ def chatbot_response(user_message, chat_history):
 with gr.Blocks(theme="soft") as gradio_app:    
     gr.Markdown(
         """
-        # Movie Recommendation Chatbot
-        Get personalized movie recommendations powered by GNN and LLM.
+            # 🎬 Movie Recommendation Chatbot  
+            Get personalized movie recommendations powered by GNN and LLM.  
+            개인화된 영화 추천을 GNN과 LLM 기반으로 제공합니다.  
+
+            **ℹ️ Note:** <br>
+            <span style="color:blue; font-weight:bold">Each request is handled independently.</span> For follow-up recommendation, please include your full query again.  
+            <span style="color:blue; font-weight:bold">각 요청은 독립적으로 처리됩니다.</span> 추가 추천을 원하신다면 완성된 문장을 다시 입력해 주세요. 
+
+            Currently, the chatbot <span style="color:blue; font-weight:bold">only supports English</span>.  
+            다국어는 지원되지 않으니, <span style="color:blue; font-weight:bold">영어로 간단히 질문해 주세요</span>.  
+
+            ### 💡 Example  
+            - **Fact-based:** Who directed *Inception*?  
+            - **Movie Recommendation:** Recommend me a heartwarming movie starring Tom Hanks.
         """
     )
     
