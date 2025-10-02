@@ -25,7 +25,7 @@ def personalized_recommendation(user_query, state, graph, assets, chains, global
         )
     else:
         print(f"Using preferences to find recommendations: {preferences}")
-        rerank_dict = find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx)
+        rerank_dict = find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx, user_query)
         if not rerank_dict:
             return "Sorry, I couldn't find good examples for your taste. Please try another preference."
         candidates_str = format_candidates_for_prompt(rerank_dict)
