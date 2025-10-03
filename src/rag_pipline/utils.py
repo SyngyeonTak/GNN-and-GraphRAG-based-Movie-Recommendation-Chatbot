@@ -10,6 +10,7 @@ from gnn_encoder import GATRanker, rank_movies_by_attention
 from graph_utils import (
     extract_subgraph_from_global,
     convert_nx_to_pyg,
+    get_similar_movies_from_seeds,
 )
 
 os.environ['HF_HOME'] = 'D:/huggingface_cache'
@@ -291,7 +292,7 @@ def enrich_movies_with_overview(top_movies, movie_overview_dict, overview_map):
     """
     final_movies = []
     for item in top_movies:
-        movie_id = item["movid_id"]
+        movie_id = item["movie_id"]
         if movie_id in movie_overview_dict:
             title, overview = movie_overview_dict[movie_id]
         elif movie_id in overview_map:
@@ -361,8 +362,6 @@ def find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx, 
             f"movie_{m.get('m.movieId')}": (
                 m.get('m.title', 'Unknown'),
                 m.get('m.overview', 'No overview available')
-                #m.get('m.avgRating', 'No avg rating')
-                #m.get('m.ratingCount', 'No rating counts')
             )
             for m in movie_list if 'm.movieId' in m
         }
@@ -371,36 +370,30 @@ def find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx, 
             continue
 
         movie_ids = list(movie_dict.keys())
-        subgraph_nx = extract_subgraph_from_global(global_graph_nx, movie_ids, assets)
-        if subgraph_nx.number_of_nodes() == 0:
-            rerank_dict[key] = []
-            continue
-
+        sim_movie_ids = get_similar_movies_from_seeds(movie_ids, assets)
+        rec_movie_ids = movie_ids + sim_movie_ids
+        subgraph_nx = extract_subgraph_from_global(global_graph_nx, rec_movie_ids)
+        
         data, nodes = build_pyg_from_subgraph(subgraph_nx, assets)
-        if data is None:
-            rerank_dict[key] = []
-            continue
-
-        try:
-            attention_scores = run_gat_model(data)
-        except Exception as e:
-            print(f"GATRanker failed for key={key}: {e}")
-            rerank_dict[key] = []
-            continue
-
-        #quality_map = fetch_movie_quality_scores_from_dict(movie_dict)
+        attention_scores = run_gat_model(data)
+        
         quality_map = fetch_movie_quality_scores_from_nodes(graph, nodes)
 
         sorted_movies = rank_movies_by_attention(
             attention_scores, data, nodes, subgraph_nx, quality_map,
             alpha=alpha, beta=beta
         )
-        top_movies = sorted_movies[:top_k]
 
-        rerank_ids = [int(item["movid_id"].replace("movie_", "")) for item in top_movies]
+        rec_movies = [
+            movie_dict for movie_dict in sorted_movies
+            if movie_dict['movie_id'] in (sim_movie_ids if key == 'movies' else rec_movie_ids)
+        ]
+
+        rec_movies = rec_movies[:top_k]
+        rerank_ids = [int(item["movie_id"].replace("movie_", "")) for item in rec_movies]
         overview_map = fetch_movie_overviews(graph, rerank_ids)
 
-        final_movies = enrich_movies_with_overview(top_movies, movie_dict, overview_map)
+        final_movies = enrich_movies_with_overview(rec_movies, movie_dict, overview_map)
         rerank_dict[key] = final_movies
 
     return rerank_dict

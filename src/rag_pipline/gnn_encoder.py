@@ -68,7 +68,7 @@ def rank_movies_by_attention(attention_scores, data, nodes, subgraph_nx,
         final_score = alpha * attn_score + beta * quality_score
 
         results.append({
-            "movid_id": node_id,
+            "movie_id": node_id,
             "importance": attn_score,
             "avg_rating": avg_rating,
             "n_ratings": n_ratings,

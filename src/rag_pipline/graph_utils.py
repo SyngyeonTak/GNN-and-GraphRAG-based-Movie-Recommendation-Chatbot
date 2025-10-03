@@ -60,39 +60,10 @@ def create_global_nx_graph(snapshot_data: dict):
     print(f"Graph created: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
     return G
 
-def extract_subgraph_from_global(global_G, seed_movie_ids, assets, 
-                                 top_k=30, random_k=20, sim_k=5):
-    import random
-    import networkx as nx
-    import numpy as np
-
-    if not seed_movie_ids:
-        print("No seed movie IDs provided.")
-        return nx.Graph()
-
-    # Step 1. Filter seeds that exist in graph
-    seed_with_degree = [
-        (movie_id, global_G.degree(movie_id))
-        for movie_id in seed_movie_ids
-        if global_G.has_node(movie_id)
-    ]
-    if not seed_with_degree:
-        print("No valid seed nodes found.")
-        return nx.Graph()
-
-    # Sort by degree
-    seed_with_degree.sort(key=lambda x: x[1], reverse=True)
-    top_movies = [m for m, _ in seed_with_degree[:top_k]]
-
-    # Random sample
-    remaining = [m for m, _ in seed_with_degree[top_k:]]
-    random_movies = random.sample(remaining, min(random_k, len(remaining)))
-
-    # Step 2. Embedding-based expansion
+def get_similar_movies_from_seeds(seed_movie_ids, assets, sim_k=5):
     gnn_index = assets["movie"]["gnn_index"]
-    #mapping = assets["movie"]["mapping"]  # faiss_id(str) → title(str)
 
-    # seed → faiss ids (adjust to 0-based)
+    # seed → faiss ids (0-based 변환)
     faiss_ids = []
     for m in seed_movie_ids:
         try:
@@ -101,21 +72,35 @@ def extract_subgraph_from_global(global_G, seed_movie_ids, assets,
         except Exception:
             continue
 
-    sim_movies = []
-    if faiss_ids:
-        # seed centroid
-        seed_vecs = np.vstack([gnn_index.reconstruct(fid) for fid in faiss_ids])
-        centroid = np.mean(seed_vecs, axis=0).astype("float32").reshape(1, -1)
+    if not faiss_ids:
+        print("No valid seed_movie_ids for FAISS.")
+        return []
 
-        # FAISS 검색
-        D, I = gnn_index.search(centroid, sim_k)
-        for idx in I[0]:
-            neo4j_id = f"movie_{idx+1}"   # 다시 1-based
-            if global_G.has_node(neo4j_id):
-                sim_movies.append(neo4j_id)
+    # seed centroid
+    seed_vecs = np.vstack([gnn_index.reconstruct(fid) for fid in faiss_ids])
+    centroid = np.mean(seed_vecs, axis=0).astype("float32").reshape(1, -1)
+
+    # FAISS 검색
+    D, I = gnn_index.search(centroid, sim_k + len(faiss_ids))
+
+    # 결과에서 seed 자신들은 제거
+    sim_movies = []
+    for idx in I[0]:
+        neo4j_id = f"movie_{idx+1}"   # 다시 1-based
+        if neo4j_id not in seed_movie_ids:
+            sim_movies.append(neo4j_id)
+        if len(sim_movies) >= sim_k:
+            break
+
+    return sim_movies
+
+def extract_subgraph_from_global(global_G, seed_movie_ids):
+    if not seed_movie_ids:
+        print("No seed movie IDs provided.")
+        return nx.Graph()
 
     # Step 3. Final selection
-    selected_movies = set(top_movies + random_movies + sim_movies)
+    selected_movies = set(seed_movie_ids)
 
     # Step 4. Build minimal subgraph via shortest paths
     nodes_for_subgraph = set(selected_movies)
