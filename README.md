@@ -1,6 +1,10 @@
-# 🎬 GNN & GraphRAG 기반 영화 추천 챗봇
-
-> Neo4j (GraphRAG) + GNN + LLM 기반 영화 추천 챗봇
+# 🎬 GraphRAG 기반 영화 추천 챗봇
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Neo4j](https://img.shields.io/badge/Neo4j-4581C3?style=for-the-badge&logo=neo4j&logoColor=white)
+![FAISS](https://img.shields.io/badge/FAISS-009688?style=for-the-badge&logo=meta&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
+![LangChain](https://img.shields.io/badge/LangChain-0FA958?style=for-the-badge&logo=chainlink&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 
 ---
 
@@ -12,7 +16,7 @@
   - MovieLens 32M 데이터셋 (movies, ratings)  
   - TMDb API 연동으로 배우/감독 메타데이터 수집
   - 배우·감독 정보가 존재하는 영화 중 **평점 수 기준 상위 3,000편**을 선별  
-  - User rating은 해당 3,000편을 기준으로 약 **20만 개(200K)** 샘플
+  - User rating은 약 **20만 개(200K)** 샘플
   - 데이터 정제
   - 🔗 [Download Processed Dataset (Google Drive)](https://drive.google.com/file/d/1PYOmmc4wWMleNUx6AeVUnLVl_CU4QgUw/view?usp=sharing)
 
