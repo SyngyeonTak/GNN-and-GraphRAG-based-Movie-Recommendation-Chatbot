@@ -100,7 +100,7 @@ def main():
         #{"TestCase_ID": "F-01-1", "User_Input": "Can you recommend me a movie?", "Test_Objective": "Basic recommendation"},
         #{"TestCase_ID": "F-01-2", "User_Input": "I like action movies.", "Test_Objective": "Extract user preference"},
         #{"TestCase_ID": "F-01-3", "User_Input": "Recommend me a movie directed by Christopher Nolan.", "Test_Objective": "Director-based recommendation"},
-        {"TestCase_ID": "F-01-4", "User_Input": "movies like interstella", "Test_Objective": "Movie information retrieval"}
+        {"TestCase_ID": "F-01-4", "User_Input": "heartwarming movies about World War 2", "Test_Objective": "Movie information retrieval"}
         #{"TestCase_ID": "F-01-5", "User_Input": "Thanks!", "Test_Objective": "Simple chit-chat response"}
     ]
 

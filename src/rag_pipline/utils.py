@@ -58,18 +58,31 @@ def load_recommendation_assets(base_path="./dataset/faiss"):
             gnn_emb_path = f"{base_path}/{entity}_embeddings.faiss"
             text_emb_path = f"{base_path}/{entity}_text_embeddings.faiss"
             mapping_path = f"{base_path}/{entity}_mapping.json"
-            
-            assets[entity] = {
+
+            # 기본 구조
+            entity_assets = {
                 "gnn_index": faiss.read_index(gnn_emb_path),
                 "text_index": faiss.read_index(text_emb_path),
                 "mapping": json.load(open(mapping_path, 'r', encoding='utf-8'))
             }
+
+            # movie일 경우 overview 임베딩도 추가
+            if entity == "movie":
+                overview_emb_path = f"{base_path}/{entity}_overview_embeddings.faiss"
+                if os.path.exists(overview_emb_path):
+                    entity_assets["overview_index"] = faiss.read_index(overview_emb_path)
+                    print("  ↳ Loaded movie overview embeddings.")
+                else:
+                    print("  ⚠️ movie_overview_embeddings.faiss not found — skipping.")
+
+            assets[entity] = entity_assets
             print(f"Loaded {entity} assets.")
             
-        print("All recommendation assets loaded successfully.")
+        print("✅ All recommendation assets loaded successfully.")
         return assets
+
     except Exception as e:
-        print(f"Failed to load recommendation assets: {e}")
+        print(f"❌ Failed to load recommendation assets: {e}")
         return None
 
 
@@ -305,40 +318,26 @@ def enrich_movies_with_overview(top_movies, movie_overview_dict, overview_map):
     return final_movies
 
 
-def semantic_filter_movies(movie_list, query, semantic_top_k=10):
-    """
-    SentenceTransformer를 이용해 retrieved_dict에서 query와 가장 유사한 영화만 필터링
-    
-    Args:
-        retrieved_dict (dict): {movie_id: {"title": ..., "overview": ...}} 형태
-        query (str): 사용자 검색 질의
-        semantic_top_k (int): 상위 몇 개를 추릴지
-    
-    Returns:
-        dict: 상위 semantic_top_k 영화만 담은 dict
-    """
-    # 후보 영화 overview 수집
-    overviews = [m["m.overview"] for m in movie_list]
-    movie_keys = [m["m.movieId"] for m in movie_list]
+def semantic_filter_movies(movie_list, query, assets, semantic_top_k=10):
+    # movie asset 로드
+    overview_index = assets["movie"]["overview_index"]
 
-    if not overviews:
-        return movie_list
+    # movie_list 내 ID 추출
+    movie_ids = [m["m.movieId"] for m in movie_list]
 
-    # 임베딩 계산
-    doc_emb = TEXT_EMB_MODEL.encode(overviews, convert_to_tensor=True, show_progress_bar=False)
-    query_emb = TEXT_EMB_MODEL.encode(query, convert_to_tensor=True)
+    # query 임베딩 계산
+    query_emb = TEXT_EMB_MODEL.encode(query, convert_to_numpy=True).astype('float32')
 
-    # cosine similarity 계산
-    scores = util.pytorch_cos_sim(query_emb, doc_emb)[0].cpu().numpy()
+    # query_emb을 이용해 전체 인덱스에서 검색 (cosine similarity 기반)
+    #overview_index = faiss.IndexIDMap2(overview_index)
+    faiss.normalize_L2(query_emb.reshape(1, -1))
+    _, I = overview_index.search(query_emb.reshape(1, -1), semantic_top_k * 3)  # 여유 있게 검색
 
-    # 상위 semantic_top_k 인덱스 추출
-    top_idx = scores.argsort()[::-1][:semantic_top_k]
-
-    # 필터링된 dict 생성
-    filtered_list = [movie_list[i] for i in top_idx]
+    # 결과 중 movie_list에 있는 영화만 남김
+    matched_ids = [index + 1 for index in I[0] if index + 1 in movie_ids]
+    filtered_list = [m for m in movie_list if m["m.movieId"] in matched_ids][:semantic_top_k]
 
     return filtered_list
-
 
 def find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx, query,
                            top_k=5, alpha=0.7, beta=0.3):
@@ -356,7 +355,7 @@ def find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx, 
             rerank_dict[key] = []
             continue
 
-        movie_list = semantic_filter_movies(movie_list, query)
+        movie_list = semantic_filter_movies(movie_list, query, assets)
 
         movie_dict = {
             f"movie_{m.get('m.movieId')}": (
