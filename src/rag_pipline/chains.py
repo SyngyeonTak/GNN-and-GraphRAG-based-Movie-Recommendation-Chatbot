@@ -234,6 +234,102 @@ def get_cypher_generation_chain(llm):
     )
     return LLMChain(llm=llm, prompt=cypher_prompt, verbose=False)
 
+def get_combined_cypher_generation_chain(llm):
+    """
+    Multi-entity Cypher generation chain (for combined preference queries).
+
+    - Generates ONE Cypher query combining multiple entity types (Actor, Director, Genre, etc.)
+    - The query must return movies satisfying ALL given conditions where relevant.
+    - Always return:
+        m.movieId, m.title, m.overview, m.year
+    - Use DISTINCT and multiple MATCH clauses if necessary.
+    - For multiple conditions (e.g., actor + director), use WITH m chaining.
+    - Do not generate 'similar' or 'related' queries.
+    """
+
+    combined_examples = [
+        {
+            "question": (
+                "Find movies directed by Steven Spielberg that star Tom Hanks "
+                "and belong to the Sci-Fi genre."
+            ),
+            "query": """
+            MATCH (a:Actor {{name: 'Tom Hanks'}})-[:ACTED_IN]->(m:Movie)
+            WITH DISTINCT m
+            MATCH (d:Director {{name: 'Steven Spielberg'}})-[:DIRECTED]->(m)
+            WITH DISTINCT m
+            MATCH (m)-[:HAS_GENRE]->(:Genre {{name: 'Sci-Fi'}})
+            RETURN DISTINCT m.movieId, m.title, m.overview, m.year
+            """
+        },
+        {
+            "question": (
+                "Find movies starring Leonardo DiCaprio and directed by Christopher Nolan."
+            ),
+            "query": """
+            MATCH (a:Actor {{name: 'Leonardo DiCaprio'}})-[:ACTED_IN]->(m:Movie)
+            WITH DISTINCT m
+            MATCH (d:Director {{name: 'Christopher Nolan'}})-[:DIRECTED]->(m)
+            RETURN DISTINCT m.movieId, m.title, m.overview, m.year
+            """
+        },
+        {
+            "question": (
+                "Find Action movies starring Tom Cruise or directed by Tony Scott."
+            ),
+            "query": """
+            MATCH (a:Actor {{name: 'Tom Cruise'}})-[:ACTED_IN]->(m:Movie)
+            WITH m
+            MATCH (d:Director {{name: 'Tony Scott'}})-[:DIRECTED]->(m)
+            WITH m
+            MATCH (m)-[:HAS_GENRE]->(:Genre {{name: 'Action'}})
+            RETURN DISTINCT m.movieId, m.title, m.overview, m.year
+            """
+        },
+    ]
+
+    example_prompt = PromptTemplate(
+        template="User Question:\n{question}\n\nCypher Query:\n{query}",
+        input_variables=["question", "query"]
+    )
+
+    combined_prompt = FewShotPromptTemplate(
+        examples=combined_examples,
+        example_prompt=example_prompt,
+        prefix="""
+        You are an expert Neo4j Cypher translator.
+
+        Task: Generate ONE Cypher query that combines multiple preference types
+        (such as Actor, Director, and Genre) into a single query.
+
+        RULES:
+        - Always return DISTINCT m.movieId, m.title, m.overview, m.year.
+        - Use multiple MATCH clauses with WITH m to connect constraints.
+        - If multiple preferences exist, they must all apply to the same Movie node.
+        - Use UNION or collect() only if queries must be combined across disjoint conditions.
+        - Never include "similar" or "related" logic (handled externally).
+        - Assume relationships:
+            (Actor)-[:ACTED_IN]->(Movie)
+            (Director)-[:DIRECTED]->(Movie)
+            (Movie)-[:HAS_GENRE]->(Genre)
+        - Use {{property: 'value'}} syntax.
+        - Always ensure queries are read-only and return only Movie info.
+
+        Schema:
+        {schema}
+        """,
+        suffix="""
+        User Question: {question}
+        Respond with ONLY the Cypher query.
+        Cypher Query:
+        """,
+        input_variables=["schema", "question"],
+        example_separator="\n\n"
+    )
+
+    return LLMChain(llm=llm, prompt=combined_prompt, verbose=False)
+
+
 def get_subgraph_cypher_chain(llm):
     """
     Generates Cypher to extract a subgraph using undirected patterns (m)-[r]-(n).
@@ -263,6 +359,7 @@ def get_subgraph_cypher_chain(llm):
 def get_personalized_response_chain(llm):
     """
     Final natural language response generator after GNN re-ranking and preference extraction.
+    Now includes logic to EXCLUDE any movie that appears in the user's query (e.g., 'movies like Interstellar').
     """
     final_response_template = """
     You are a helpful and knowledgeable movie recommendation expert.
@@ -274,10 +371,17 @@ def get_personalized_response_chain(llm):
     3. Candidate Movies: A list of movies pre-ranked by a graph-based AI (GNN). The GNN score reflects structural importance in the knowledge graph.
 
     Your step-by-step instructions:
-    Step 1: Deeply understand the user's taste by analyzing the "User's Original Query" and "Extracted Preferences". Look for themes, genres, moods, and key entities.
-    Step 2: For each movie in "Candidate Movies", read its overview. Re-rank the candidates based on how well their overview semantically matches the user's taste you identified in Step 1. Use the GNN importance score as a secondary factor or a tie-breaker.
-    Step 3: Select the top 2-3 best movies from your new ranking.
-    Step 4: Craft a friendly and persuasive response. For each recommended movie, briefly explain *why* you are recommending it, connecting its overview to the user's query. Present the results in a clear and appealing format.
+    Step 1: Deeply understand the user's taste by analyzing the "User's Original Query" and "Extracted Preferences". 
+            Look for themes, genres, moods, and key entities.
+    Step 2: Before ranking, identify any movie mentioned *in the user's query itself* (e.g., "recommend movies like Interstellar").
+            ❗ Do NOT include such a movie in your final ranking or explanation — it is the reference movie, not a recommendation target.
+    Step 3: For each remaining movie in "Candidate Movies", read its overview. 
+            Re-rank the candidates based on how well their overview semantically matches the user's taste you identified in Step 1. 
+            Use the GNN importance score as a secondary factor or a tie-breaker.
+    Step 4: Select the top 2–3 best movies from your new ranking.
+    Step 5: Craft a friendly and persuasive response. 
+            For each recommended movie, briefly explain *why* you are recommending it, connecting its overview to the user's query. 
+            Present the results in a clear and appealing format.
 
     --- CONTEXT ---
     User's Original Query: {user_query}
@@ -288,7 +392,12 @@ def get_personalized_response_chain(llm):
 
     Final Recommendation:
     """
-    prompt = PromptTemplate(template=final_response_template, input_variables=["user_query", "preferences_str", "candidates_str"])
+
+    prompt = PromptTemplate(
+        template=final_response_template,
+        input_variables=["user_query", "preferences_str", "candidates_str"]
+    )
+
     return LLMChain(llm=llm, prompt=prompt)
 
 def get_fact_based_response_chain(llm):

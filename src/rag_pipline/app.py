@@ -15,7 +15,7 @@ from chains import (
     get_query_router_chain, get_cypher_generation_chain, get_subgraph_cypher_chain,
     get_preference_extractor_chain, get_entity_extractor_chain, get_movie_suggester_chain,
     get_genre_mapper_chain, get_personalized_response_chain, get_fact_based_response_chain,
-    get_chit_chat_chain, get_personalized_guide_chain,
+    get_chit_chat_chain, get_personalized_guide_chain, get_combined_cypher_generation_chain
 )
 from utils import load_recommendation_assets
 from graph_utils import create_global_nx_graph
@@ -59,7 +59,8 @@ chains = {
     'personalized_responder': get_personalized_response_chain(llm),
     'personalized_guide': get_personalized_guide_chain(llm),
     'fact_based_responder': get_fact_based_response_chain(llm),
-    'chit_chatter': get_chit_chat_chain(llm)
+    'chit_chatter': get_chit_chat_chain(llm),
+    'cypher_combined_gen': get_combined_cypher_generation_chain(llm)
 }
 print("All chains initialized successfully.")
 

@@ -115,20 +115,67 @@ def find_best_match_with_embedding(name_to_find, entity_text_faiss_index, entity
     return None
 
 
-def format_candidates_for_prompt(rerank_dict: dict) -> str:
+def format_candidates_for_prompt(rerank_list):
     """
     Convert rerank_dict into a string format suitable for an LLM prompt.
     """
     output_str = ""
-    for category, movies in rerank_dict.items():
-        output_str += f"\n## Recommended based on {category.capitalize()}:\n"
-        for movie in movies:
-            title = movie.get('title', 'N/A')
-            importance = movie.get('importance', 0)
-            overview = movie.get('overview', 'No overview available.').strip()
-            output_str += f"- Title: {title}\n  GNN Score: {importance:.4f}\n  Overview: {overview}\n"
+    for movie in rerank_list:
+        title = movie.get('title', 'N/A')
+        importance = movie.get('importance', 0)
+        overview = movie.get('overview', 'No overview available.').strip()
+        output_str += f"- Title: {title}\n  GNN Score: {importance:.4f}\n  Overview: {overview}\n"
+
     return output_str
 
+
+def combine_preferences_to_question(preferences):
+        """
+        Combine multiple entity preferences into one natural language question.
+        
+        Example:
+            Input:
+                {
+                    "Actors": ["Tom Hanks"],
+                    "Directors": ["Steven Spielberg"],
+                    "Genres": ["Sci-Fi", "Adventure"]
+                }
+            Output:
+                "Find movies starring Tom Hanks, directed by Steven Spielberg,
+                and belonging to the genres Sci-Fi, Adventure."
+        """
+        parts = []
+
+        for entity_type, values in preferences.items():
+            if not values:
+                continue
+
+            vals_str = ", ".join(values)
+            entity = entity_type.lower()
+
+            if entity in ["actor", "actors"]:
+                parts.append(f"starring {vals_str}")
+            elif entity in ["director", "directors"]:
+                parts.append(f"directed by {vals_str}")
+            elif entity in ["genre", "genres"]:
+                parts.append(f"belonging to the genres {vals_str}")
+            elif entity in ["country", "countries"]:
+                parts.append(f"produced in {vals_str}")
+            elif entity in ["year", "years"]:
+                parts.append(f"released in {vals_str}")
+            else:
+                parts.append(f"related to {entity_type.lower()}: {vals_str}")
+
+        if not parts:
+            return "Find movies."
+
+        # 마지막 항목만 and로 연결
+        if len(parts) > 1:
+            question_body = ", ".join(parts[:-1]) + f", and {parts[-1]}"
+        else:
+            question_body = parts[0]
+
+        return f"Find movies {question_body}."
 
 def retrieve_movies_by_preference(preferences, assets, graph, chains):
     """
@@ -136,6 +183,7 @@ def retrieve_movies_by_preference(preferences, assets, graph, chains):
     Uses Cypher generation chain and optional genre mapping.
     """
     cypher_chain = chains['cypher_gen']
+    cypher_comb_chain = chains['cypher_combined_gen']
     genre_mapper_chain = chains['genre_mapper']
 
     def process_actor(name, asset):
@@ -171,31 +219,22 @@ def retrieve_movies_by_preference(preferences, assets, graph, chains):
                 ]
                 preferences[entity_type] = processed_list
     
-    retrieved_dict = {}
+    retrieved_list = []
 
-    def preferences_to_question(entity_type, values):
-        vals_str = ", ".join(values)
-        entity_name = entity_type[:-1] if entity_type.endswith('s') else entity_type
-        return f"Find movies related to {entity_name}(s): {vals_str}"
+    comb_question = combine_preferences_to_question(preferences)
 
-    for entity_type, values in preferences.items():
-        if not values:
-            continue
-        question = preferences_to_question(entity_type, values)
-        print(f"Generating query for [{entity_type}]")
-        print(f"Question: {question}")
-        
-        cypher_query = cypher_chain.invoke({
+    cypher_comb_query = cypher_comb_chain.invoke({
             "schema": graph.schema, 
-            "question": question
+            "question": comb_question
         })['text']
-        print(f"Generated Cypher: {cypher_query}")
         
-        clean_cypher = clean_cypher_query(cypher_query)
-        movies = graph.query(clean_cypher)
-        retrieved_dict[entity_type] = movies
+    print(f"Generated cypher_comb_query: {cypher_comb_query}")
+    clean_comb_cypher = clean_cypher_query(cypher_comb_query)
+    movies_comb = graph.query(clean_comb_cypher)
 
-    return retrieved_dict
+    retrieved_list = movies_comb
+
+    return retrieved_list
 
 
 def fetch_movie_quality_scores_from_dict(movie_dict):
@@ -307,7 +346,9 @@ def enrich_movies_with_overview(top_movies, movie_overview_dict, overview_map):
     for item in top_movies:
         movie_id = item["movie_id"]
         if movie_id in movie_overview_dict:
-            title, overview = movie_overview_dict[movie_id]
+            movie_dict = movie_overview_dict[movie_id]
+            title = movie_dict['title']
+            overview = movie_dict['overview']
         elif movie_id in overview_map:
             title, overview = overview_map[movie_id]
         else:
@@ -327,15 +368,21 @@ def semantic_filter_movies(movie_list, query, assets, semantic_top_k=10):
 
     # query 임베딩 계산
     query_emb = TEXT_EMB_MODEL.encode(query, convert_to_numpy=True).astype('float32')
-
+    
     # query_emb을 이용해 전체 인덱스에서 검색 (cosine similarity 기반)
     #overview_index = faiss.IndexIDMap2(overview_index)
     faiss.normalize_L2(query_emb.reshape(1, -1))
-    _, I = overview_index.search(query_emb.reshape(1, -1), semantic_top_k * 3)  # 여유 있게 검색
+    _, I = overview_index.search(query_emb.reshape(1, -1), overview_index.ntotal)  # 여유 있게 검색
 
-    # 결과 중 movie_list에 있는 영화만 남김
-    matched_ids = [index + 1 for index in I[0] if index + 1 in movie_ids]
-    filtered_list = [m for m in movie_list if m["m.movieId"] in matched_ids][:semantic_top_k]
+    # I 순서대로 movie_ids 필터링
+    matched_ids = [index + 1 for index in I[0] if (index + 1) in movie_ids]
+
+    # movie_ids의 순서를 matched_ids 순서로 정렬
+    sorted_list = sorted(movie_list, key=lambda m: matched_ids.index(m["m.movieId"]) 
+                         if m["m.movieId"] in matched_ids else float('inf'))
+
+    # 상위 semantic_top_k만 선택
+    filtered_list = sorted_list[:semantic_top_k]
 
     return filtered_list
 
@@ -343,56 +390,56 @@ def find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx, 
                            top_k=5, alpha=0.7, beta=0.3):
     """
     Retrieve candidate movies and rerank them using GAT attention + user ratings.
+    Automatically excludes seed movie mentioned in user query (e.g., "movies like Interstellar").
     """
-    retrieved_dict = retrieve_movies_by_preference(preferences, assets, graph, chains)
+    # Step 1. Retrieve candidates by preferences
+    retrieved_list = retrieve_movies_by_preference(preferences, assets, graph, chains)
+    if not retrieved_list:
+        return []
 
-    if not retrieved_dict:
-        return retrieved_dict
+    # Step 2. Semantic filtering
+    movie_list = semantic_filter_movies(retrieved_list, query, assets)
 
-    rerank_dict = {}
-    for key, movie_list in retrieved_dict.items():
-        if not movie_list:
-            rerank_dict[key] = []
-            continue
-
-        movie_list = semantic_filter_movies(movie_list, query, assets)
-
-        movie_dict = {
-            f"movie_{m.get('m.movieId')}": (
-                m.get('m.title', 'Unknown'),
-                m.get('m.overview', 'No overview available')
-            )
-            for m in movie_list if 'm.movieId' in m
+    # Step 3. Build dictionary for titles and overviews
+    movie_dict = {
+        f"movie_{m.get('m.movieId')}": {
+            "movie_id": f"movie_{m.get('m.movieId')}",
+            "title": m.get('m.title', 'Unknown'),
+            "overview": m.get('m.overview', 'No overview available')
         }
-        if not movie_dict:
-            rerank_dict[key] = []
-            continue
+        for m in movie_list if 'm.movieId' in m
+    }
 
-        movie_ids = list(movie_dict.keys())
+    movie_ids = list(movie_dict.keys())
+
+    # Step 4. FAISS-based similarity expansion
+    if len(movie_ids) < 5:
         sim_movie_ids = get_similar_movies_from_seeds(movie_ids, assets)
-        rec_movie_ids = movie_ids + sim_movie_ids
-        subgraph_nx = extract_subgraph_from_global(global_graph_nx, rec_movie_ids)
-        
-        data, nodes = build_pyg_from_subgraph(subgraph_nx, assets)
-        attention_scores = run_gat_model(data)
-        
-        quality_map = fetch_movie_quality_scores_from_nodes(graph, nodes)
+        movie_ids = movie_ids + sim_movie_ids
+    
+    rec_movie_ids = list(set(movie_ids))
 
-        sorted_movies = rank_movies_by_attention(
-            attention_scores, data, nodes, subgraph_nx, quality_map,
-            alpha=alpha, beta=beta
-        )
+    # Step 5. Build GNN subgraph and compute attention
+    subgraph_nx = extract_subgraph_from_global(global_graph_nx, rec_movie_ids)
+    data, nodes = build_pyg_from_subgraph(subgraph_nx, assets)
+    attention_scores = run_gat_model(data)
+    quality_map = fetch_movie_quality_scores_from_nodes(graph, nodes)
 
-        rec_movies = [
-            movie_dict for movie_dict in sorted_movies
-            if movie_dict['movie_id'] in (sim_movie_ids if key == 'movies' else rec_movie_ids)
-        ]
+    # Step 6. Rank movies by attention and quality
+    sorted_movies = rank_movies_by_attention(
+        attention_scores, data, nodes, subgraph_nx, quality_map,
+        alpha=alpha, beta=beta
+    )
 
-        rec_movies = rec_movies[:top_k]
-        rerank_ids = [int(item["movie_id"].replace("movie_", "")) for item in rec_movies]
-        overview_map = fetch_movie_overviews(graph, rerank_ids)
+    # Step 7. Filter to only relevant movie_ids
+    rec_movies = [
+        m for m in sorted_movies
+        if m.get('movie_id') in rec_movie_ids
+    ][:top_k]
 
-        final_movies = enrich_movies_with_overview(rec_movies, movie_dict, overview_map)
-        rerank_dict[key] = final_movies
+    # Step 8. Fetch overviews and enrich results
+    rerank_ids = [int(m["movie_id"].replace("movie_", "")) for m in rec_movies]
+    overview_map = fetch_movie_overviews(graph, rerank_ids)
+    final_movies = enrich_movies_with_overview(rec_movies, movie_dict, overview_map)
 
-    return rerank_dict
+    return final_movies
