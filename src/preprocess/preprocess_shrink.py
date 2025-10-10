@@ -30,12 +30,16 @@ valid_movies = movies[
     movies["director"].notna() &
     movies["actors"].apply(has_valid_actors)
 ]
+
+### 1980년 이후 영화만 필터링
+valid_movies = valid_movies[valid_movies["year"] >= 1980]
+
 valid_movie_ids = set(valid_movies["movieId"].unique())
 
 ratings = ratings[ratings["movieId"].isin(valid_movie_ids)]
 movies = movies[movies["movieId"].isin(valid_movie_ids)]
 
-print(f"After filtering: {len(movies)} movies, {len(ratings)} ratings")
+print(f"After filtering (>=1980): {len(movies)} movies, {len(ratings)} ratings")
 
 # -----------------------
 # 3. 인기 영화 Top-3000 선정
@@ -74,9 +78,9 @@ movies_filtered = movies[movies["movieId"].isin(top_movies)]
 print(f"After top-3000 by decade: {len(movies_filtered)} movies, {len(ratings_filtered)} ratings")
 
 # -----------------------
-# 4. Ratings 샘플링 (200K, stratified)
+# 4. Ratings 샘플링 (300K, stratified)
 # -----------------------
-target_size = 200_000
+target_size = 300_000
 movie_weights = ratings_filtered["movieId"].value_counts(normalize=True)
 sample_sizes = (movie_weights * target_size).astype(int)
 
