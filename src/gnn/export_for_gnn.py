@@ -114,5 +114,5 @@ def verify_snapshot_file(snapshot_path='./dataset/graph_snapshot.pkl'):
 
 
 if __name__ == "__main__":
-    export_graph_data_to_file()
+    #export_graph_data_to_file()
     verify_snapshot_file(snapshot_path='./dataset/graph_snapshot.pkl')

@@ -46,7 +46,7 @@ def clear_database(conn):
     CALL apoc.periodic.iterate(
       'MATCH (n) RETURN id(n) AS id',
       'MATCH (n) WHERE id(n) = id DETACH DELETE n',
-      {batchSize: 5000, iterateList: true}
+      {batchSize: 500, iterateList: true}
     )
     """
     conn.execute_query(delete_query)
