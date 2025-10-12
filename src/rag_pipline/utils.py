@@ -130,52 +130,60 @@ def format_candidates_for_prompt(rerank_list):
 
 
 def combine_preferences_to_question(preferences):
-        """
-        Combine multiple entity preferences into one natural language question.
-        
-        Example:
-            Input:
-                {
-                    "Actors": ["Tom Hanks"],
-                    "Directors": ["Steven Spielberg"],
-                    "Genres": ["Sci-Fi", "Adventure"]
-                }
-            Output:
-                "Find movies starring Tom Hanks, directed by Steven Spielberg,
-                and belonging to the genres Sci-Fi, Adventure."
-        """
-        parts = []
+    """
+    Combine multiple entity preferences into one natural language question.
 
-        for entity_type, values in preferences.items():
-            if not values:
-                continue
+    Special rule:
+    - If only 'movies' (or 'movie') key is provided, simply return that movie itself.
+      (Do NOT generate 'related to' or 'similar' style questions)
+    """
 
-            vals_str = ", ".join(values)
-            entity = entity_type.lower()
+    # 소문자 키 일관 처리
+    preferences = {k.lower(): v for k, v in preferences.items()}
 
-            if entity in ["actor", "actors"]:
-                parts.append(f"starring {vals_str}")
-            elif entity in ["director", "directors"]:
-                parts.append(f"directed by {vals_str}")
-            elif entity in ["genre", "genres"]:
-                parts.append(f"belonging to the genres {vals_str}")
-            elif entity in ["country", "countries"]:
-                parts.append(f"produced in {vals_str}")
-            elif entity in ["year", "years"]:
-                parts.append(f"released in {vals_str}")
-            else:
-                parts.append(f"related to {entity_type.lower()}: {vals_str}")
+    # 1️⃣ 단일 영화만 있는 경우 → 그대로 반환
+    if preferences.get("movies") and not any(
+        preferences.get(k) for k in ["actors", "directors", "genres", "countries", "years"]
+    ):
+        movie_title = preferences["movies"][0]
+        return f"Find the movie titled {movie_title}."
 
-        if not parts:
-            return "Find movies."
+    # 2️⃣ 일반 조합 처리
+    parts = []
 
-        # 마지막 항목만 and로 연결
-        if len(parts) > 1:
-            question_body = ", ".join(parts[:-1]) + f", and {parts[-1]}"
+    for entity_type, values in preferences.items():
+        if not values:
+            continue
+
+        vals_str = ", ".join(values)
+        entity = entity_type.lower()
+
+        if entity in ["actor", "actors"]:
+            parts.append(f"starring {vals_str}")
+        elif entity in ["director", "directors"]:
+            parts.append(f"directed by {vals_str}")
+        elif entity in ["genre", "genres"]:
+            parts.append(f"belonging to the genres {vals_str}")
+        elif entity in ["country", "countries"]:
+            parts.append(f"produced in {vals_str}")
+        elif entity in ["year", "years"]:
+            parts.append(f"released in {vals_str}")
+        elif entity in ["movie", "movies"]:
+            # 영화가 다른 엔티티와 같이 존재할 경우만 related 처리
+            parts.append(f"related to the movie {vals_str}")
         else:
-            question_body = parts[0]
+            parts.append(f"related to {entity_type.lower()}: {vals_str}")
 
-        return f"Find movies {question_body}."
+    if not parts:
+        return "Find movies."
+
+    # 마지막 항목만 and로 연결
+    if len(parts) > 1:
+        question_body = ", ".join(parts[:-1]) + f", and {parts[-1]}"
+    else:
+        question_body = parts[0]
+
+    return f"Find movies {question_body}."
 
 def retrieve_movies_by_preference(preferences, assets, graph, chains):
     """

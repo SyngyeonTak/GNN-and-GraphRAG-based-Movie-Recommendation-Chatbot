@@ -105,7 +105,7 @@ with gr.Blocks(theme="soft") as gradio_app:
             - **Fact-based:** Who directed *Inception*?  
             - **Fact-based:** Who starred in *Everything Everywhere All at Once*?  
             - **Movie Recommendation:** Recommend heartwarming movies starring Tom Hanks.
-            - **Movie Recommendation:** Movies that would cheer me up.
+            - **Movie Recommendation:** Movies like interstella
         """
     )
     
