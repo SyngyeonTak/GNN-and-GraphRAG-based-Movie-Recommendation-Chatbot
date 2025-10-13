@@ -15,8 +15,9 @@
 - **데이터 준비**
   - MovieLens 32M 데이터셋 (movies, ratings)  
   - TMDb API 연동으로 배우/감독 메타데이터 수집
-  - 배우·감독 정보가 존재하는 영화 중 **평점 수 기준 상위 3,000편**을 선별  
-  - User rating은 약 **20만 개(200K)** 샘플
+  - 1980년 이후부터 2024년 까지의 영화 대상
+  - 배우·감독 정보가 존재하는 영화 중 **평점 수 기준 상위 3,000편**을 선별
+  - User rating은 약 **30만 개(200K)** 샘플
   - 데이터 정제
   - 🔗 [Download Processed Dataset (Google Drive)](https://drive.google.com/file/d/1PYOmmc4wWMleNUx6AeVUnLVl_CU4QgUw/view?usp=sharing)
 
@@ -27,7 +28,7 @@
 
 - **GNN 모델 임베딩 학습 및 FAISS 벡터 db 구축**
   - Neo4j Aura의 지식 그래프를 PyTorch Geometric (PyG) 객체로 변환  
-  - Heterogeneous Graph Attention Network (HGAT) 노드 임베딩 학습
+  - HeteroConv(GATConv) 기반의 Heterogeneous Graph Attention Network (HGAT) 구조로 노드 임베딩 학습
   - FAISS에 노드 임베딩 저장 (유사도 검색)  
 
 ---
@@ -116,7 +117,10 @@ src/
 
 ## 📖참고 문헌
 - Wang, X., Ji, H., Shi, C., Wang, B., Ye, Y., Cui, P., & Yu, P. S. (2019).  
-  [Heterogeneous Graph Attention Network (HGAT)](https://dl.acm.org/doi/10.1145/3308558.3313562). *The World Wide Web Conference (WWW)*, 2022–2032.  
+  [Heterogeneous Graph Attention Network](https://dl.acm.org/doi/10.1145/3308558.3313562). *The World Wide Web Conference (WWW)*, 2022–2032.  
+
+- Hu, Z., Dong, Y., Wang, K., & Sun, Y. (2022).  
+  [Heterogeneous Graph Transformer](https://dl.acm.org/doi/abs/10.1145/3366423.3380027). *In Proceedings of the web conference 2020 (pp. 2704-2710).
 
 - Han, H., Wang, Y., Shomer, H., Guo, K., Ding, J., Lei, Y., ... & Tang, J. (2024).  
   [Retrieval-Augmented Generation with Graphs (GraphRAG)](https://arxiv.org/abs/2501.00309). *arXiv preprint arXiv:2501.00309*.
