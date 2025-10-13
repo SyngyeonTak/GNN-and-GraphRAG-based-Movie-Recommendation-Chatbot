@@ -91,14 +91,15 @@ with gr.Blocks(theme="soft") as gradio_app:
     gr.Markdown(
         """
             # 🎬 Movie Recommendation Chatbot  
-            Get movie recommendations powered by GNN and LLM.  
-            영화 추천을 GNN과 LLM 기반으로 제공합니다.  
+            GNN, LLM 기반 영화 추천 챗봇
+
+            # Movie DB 설명
+            MovieLens 32M 데이터셋 <br>
+            - 1980년 이후부터 2024년 까지의 영화 대상 <br>
+            - 배우·감독 정보가 존재하는 영화 중 **평점 수 기준 상위 3,000편**을 선별
 
             **ℹ️ Note:** <br>
-            <span style="color:blue; font-weight:bold"> For follow-up recommendation, please include your full query again.</span> 
-            <span style="color:blue; font-weight:bold"> 추가 추천을 원하신다면 완성된 문장을 다시 입력해 주세요. </span> 
-
-            <span style="color:blue; font-weight:bold">The chatbot only supports English</span>.  
+            <span style="color:blue; font-weight:bold"> 추가 추천을 원하신다면 완성된 문장을 다시 입력해 주세요. </span> <br>
             <span style="color:blue; font-weight:bold">영어로 간단히 질문해 주세요</span>.  
 
             ### 💡 Fact Question Examples 
