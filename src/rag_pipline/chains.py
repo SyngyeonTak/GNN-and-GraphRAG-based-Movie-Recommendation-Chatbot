@@ -40,11 +40,11 @@ def get_preference_extractor_chain(llm):
     First, if there are any spelling or name mistakes in the statement (like 'Tam Honks' instead of 'Tom Hanks'),
     correct them silently and proceed as if the correct version was provided.
 
-    Then, extract actors, directors, genres and movies.
+    Then, extract actors, directors, genres, movies, and general keywords.
 
     Respond with ONLY a JSON object containing the extracted information.
     If no information is found for a category, provide an empty list [].
-    The keys of the JSON should be "actors", "directors", "genres" and "movies".
+    The keys of the JSON should be "actors", "directors", "genres", "movies", and "keywords".
 
     Example 1:
     User's Statement: "I want to watch a thrilling action movie."
@@ -53,7 +53,8 @@ def get_preference_extractor_chain(llm):
         "actors": [],
         "directors": [],
         "genres": ["action"],
-        "movies": []
+        "movies": [],
+        "keywords": ["thrilling"]
     }}
 
     Example 2:
@@ -63,7 +64,8 @@ def get_preference_extractor_chain(llm):
         "actors": ["Tom Hanks"],
         "directors": [],
         "genres": ["drama"],
-        "movies": []
+        "movies": [],
+        "keywords": []
     }}
 
     Example 3:
@@ -73,7 +75,8 @@ def get_preference_extractor_chain(llm):
         "actors": [],
         "directors": [],
         "genres": ["fun"],
-        "movies": []
+        "movies": [],
+        "keywords": ["fun"]
     }}
 
     Example 4:
@@ -83,7 +86,19 @@ def get_preference_extractor_chain(llm):
         "actors": [],
         "directors": [],
         "genres": [],
-        "movies": ["Toy Story"]
+        "movies": ["Toy Story"],
+        "keywords": []
+    }}
+
+    Example 5:
+    User's Statement: "movies about game"
+    JSON Output =
+    {{
+        "actors": [],
+        "directors": [],
+        "genres": [],
+        "movies": [],
+        "keywords": ["game"]
     }}
 
     User's Statement: "{user_input}"
@@ -102,7 +117,7 @@ def get_entity_extractor_chain(llm):
 
     Output Format Instructions:
     - Respond with ONLY a valid JSON object.
-    - The JSON object must have the following keys: "movie", "actor", "director", "genre".
+    - The JSON object must have the following keys: "movie", "actor", "director", "genre", "keywords".
     - The value for each key must be a list of strings.
     - If no entity of a certain type is found, its value should be an empty list [].
 
@@ -113,7 +128,8 @@ def get_entity_extractor_chain(llm):
         "movie": ["The Godfather"],
         "actor": [],
         "director": [],
-        "genre": []
+        "genre": [],
+        "keywords": []
     }}
 
     Question: "Show me some crime movies starring Al Pacino"
@@ -122,7 +138,8 @@ def get_entity_extractor_chain(llm):
         "movie": [],
         "actor": ["Al Pacino"],
         "director": [],
-        "genre": ["Crime"]
+        "genre": ["Crime"],
+        "keywords": []
     }}
 
     Question: "I want to see a film by Christopher Nolan with Leonardo DiCaprio."
@@ -131,7 +148,18 @@ def get_entity_extractor_chain(llm):
         "movie": [],
         "actor": ["Leonardo DiCaprio"],
         "director": ["Christopher Nolan"],
-        "genre": []
+        "genre": [],
+        "keywords": []
+    }}
+
+    Question: "movies about game"
+    JSON Output =
+    {{
+        "movies": [],
+        "actors": [],
+        "directors": [],
+        "genres": [],
+        "keywords": ["game"]
     }}
     --- END OF EXAMPLES ---
 
@@ -379,9 +407,10 @@ def get_personalized_response_chain(llm):
             Re-rank the candidates based on how well their overview semantically matches the user's taste you identified in Step 1. 
             Use the GNN importance score as a secondary factor or a tie-breaker.
     Step 4: Select the top 2–3 best movies from your new ranking.
-    Step 5: Craft a friendly and persuasive response. 
-            For each recommended movie, briefly explain *why* you are recommending it, connecting its overview to the user's query. 
-            Present the results in a clear and appealing format.
+    Step 5: Craft a friendly and persuasive response.
+            ✅ Only include the top recommended movies in your final message.
+            🚫 Do NOT mention or discuss any other movies, even to say they are less relevant or misaligned.
+            Your response must *only* contain the recommended titles and their brief reasons.
 
     --- CONTEXT ---
     User's Original Query: {user_query}
@@ -402,17 +431,23 @@ def get_personalized_response_chain(llm):
 
 def get_fact_based_response_chain(llm):
     """
-    Formats database query results into a natural response.
+    Formats database query results into a natural response,
+    showing only information relevant to the user's question.
     """
     response_formatter_template = """
     You are a friendly and helpful movie chatbot assistant.
-    Your task is to answer the user's question based on the data retrieved from a database.
+    Your task is to answer the user's question based *strictly* on the data retrieved from a database.
     Format the data into a clear, natural, and helpful answer.
 
-    - If the retrieved data is an empty list or contains no useful information, politely state that you couldn't find a specific answer.
-    - If the data is a list of movies, people, or other entities, present it clearly, perhaps using bullet points if appropriate.
-    - If the data is a single value (like a year or a name), state the answer directly.
-    - Do not just repeat the data structure. Explain it naturally.
+    --- IMPORTANT RULES ---
+    1. Only include information that is directly relevant to the user's question.
+       - If a piece of data does not clearly help answer the question, IGNORE it completely.
+       - Do NOT list unrelated items or provide "extra trivia".
+    2. If the retrieved data is an empty list or contains no relevant information, politely state that you couldn't find a specific answer.
+    3. If the data is a list of relevant movies, people, or other entities, present it clearly, perhaps using bullet points if appropriate.
+    4. If the data is a single value (like a year, name, or director), state the answer directly.
+    5. Do not just repeat the data structure. Explain it naturally and clearly.
+    6. Do NOT infer or fabricate any information beyond what is provided.
 
     --- CONTEXT ---
     User's Original Question: {user_query}
@@ -420,9 +455,14 @@ def get_fact_based_response_chain(llm):
     {cypher_result}
     --- END OF CONTEXT ---
 
-    Helpful Answer:
+    Helpful and Relevant Answer:
     """
-    prompt = PromptTemplate(template=response_formatter_template, input_variables=["user_query", "cypher_result"])
+
+    prompt = PromptTemplate(
+        template=response_formatter_template,
+        input_variables=["user_query", "cypher_result"]
+    )
+
     return LLMChain(llm=llm, prompt=prompt)
 
 def get_chit_chat_chain(llm):

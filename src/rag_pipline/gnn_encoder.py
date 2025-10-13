@@ -64,7 +64,7 @@ def rank_movies_by_attention(attention_scores, data, nodes, subgraph_nx,
         norm_avg_rating = avg_rating / 5.0
         norm_n_ratings = np.log1p(n_ratings) / np.log1p(max_n_ratings)
 
-        quality_score = 0.5 * norm_avg_rating + 0.5 * norm_n_ratings
+        quality_score = 0.8 * norm_avg_rating + 0.2 * norm_n_ratings
         final_score = alpha * attn_score + beta * quality_score
 
         results.append({

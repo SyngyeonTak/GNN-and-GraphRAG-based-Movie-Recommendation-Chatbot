@@ -3,7 +3,10 @@ from utils import (
     clean_cypher_query, 
     find_movies_with_faiss,
     format_candidates_for_prompt,
-    find_best_name
+    find_best_name,
+    semantic_filter_movies,
+    fetch_movie_overviews,
+    enrich_movies_with_overview
 )
 import json
 
@@ -68,6 +71,7 @@ def fact_based_search(query: str, graph, assets: dict, chains: dict):
     # 2. Perform Fuzzy Matching
     corrected_entities = {}
     for entity_type, names in extracted_entities.items():
+
         if not names:
             continue
         entity_asset = assets.get(entity_type)
@@ -78,8 +82,9 @@ def fact_based_search(query: str, graph, assets: dict, chains: dict):
         if valid_names:
             corrected_entities[entity_type] = valid_names
 
-    if not corrected_entities:
+    if (not corrected_entities) and (not extracted_entities['keywords']):
         return "I'm sorry, but I couldn't find a match for that in my database."
+    
     print(f"Corrected Entities: {corrected_entities}")
 
     # 3. Replace original query terms with corrected entity names
@@ -102,6 +107,9 @@ def fact_based_search(query: str, graph, assets: dict, chains: dict):
         )
     }
     generated_cypher = chains['cypher_gen'].invoke(cypher_input)['text']
+
+    generated_comb_cypher = chains['cypher_combined_gen'].invoke(cypher_input)['text']
+
     cleaned_cypher = clean_cypher_query(generated_cypher)
     print(f"Generated Cypher: {cleaned_cypher}")
 
@@ -112,13 +120,19 @@ def fact_based_search(query: str, graph, assets: dict, chains: dict):
         return "Sorry, I ran into an error trying to find that information."
 
     # 5. Format the final response
-    if not cypher_result:
-        return "I couldn't find any information for your query. Do you have another question?"
     
+    if not cypher_result:
+        semantic_result = semantic_filter_movies([], query, assets)
+        semantic_ids = [list(movie_dict.values())[0] for movie_dict in semantic_result]
+        final_results = fetch_movie_overviews(graph, semantic_ids)
+    else:
+        final_results = cypher_result
+
+
     fact_based_response_chain = chains['fact_based_responder']
     final_answer = fact_based_response_chain.invoke({
         "user_query": query,
-        "cypher_result": json.dumps(cypher_result)
+        "cypher_result": json.dumps(final_results)
     })['text']
     
     return final_answer

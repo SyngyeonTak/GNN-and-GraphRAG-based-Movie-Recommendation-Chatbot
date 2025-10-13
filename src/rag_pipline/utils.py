@@ -136,6 +136,7 @@ def combine_preferences_to_question(preferences):
     Special rule:
     - If only 'movies' (or 'movie') key is provided, simply return that movie itself.
       (Do NOT generate 'related to' or 'similar' style questions)
+    - 'genres' or 'genre' keys are ignored.
     """
 
     # 소문자 키 일관 처리
@@ -143,7 +144,7 @@ def combine_preferences_to_question(preferences):
 
     # 1️⃣ 단일 영화만 있는 경우 → 그대로 반환
     if preferences.get("movies") and not any(
-        preferences.get(k) for k in ["actors", "directors", "genres", "countries", "years"]
+        preferences.get(k) for k in ["actors", "directors", "countries", "years"]
     ):
         movie_title = preferences["movies"][0]
         return f"Find the movie titled {movie_title}."
@@ -155,15 +156,17 @@ def combine_preferences_to_question(preferences):
         if not values:
             continue
 
-        vals_str = ", ".join(values)
         entity = entity_type.lower()
+        vals_str = ", ".join(values)
+
+        # 🎯 장르는 완전히 무시
+        if entity in ["genre", "genres", "keywords"]:
+            continue
 
         if entity in ["actor", "actors"]:
             parts.append(f"starring {vals_str}")
         elif entity in ["director", "directors"]:
             parts.append(f"directed by {vals_str}")
-        elif entity in ["genre", "genres"]:
-            parts.append(f"belonging to the genres {vals_str}")
         elif entity in ["country", "countries"]:
             parts.append(f"produced in {vals_str}")
         elif entity in ["year", "years"]:
@@ -371,28 +374,39 @@ def semantic_filter_movies(movie_list, query, assets, semantic_top_k=10):
     # movie asset 로드
     overview_index = assets["movie"]["overview_index"]
 
-    # movie_list 내 ID 추출
-    movie_ids = [m["m.movieId"] for m in movie_list]
-
     # query 임베딩 계산
     query_emb = TEXT_EMB_MODEL.encode(query, convert_to_numpy=True).astype('float32')
-    
-    # query_emb을 이용해 전체 인덱스에서 검색 (cosine similarity 기반)
-    #overview_index = faiss.IndexIDMap2(overview_index)
     faiss.normalize_L2(query_emb.reshape(1, -1))
-    _, I = overview_index.search(query_emb.reshape(1, -1), overview_index.ntotal)  # 여유 있게 검색
+
+    # 전체 인덱스에서 검색 (cosine similarity 기반)
+    _, I = overview_index.search(query_emb.reshape(1, -1), overview_index.ntotal)
+
+    # movie_list가 비어 있으면 상위 semantic_top_k개의 영화 반환
+    if not movie_list:
+        matched_ids = [index + 1 for index in I[0][:semantic_top_k]]
+        filtered_list = [
+            {"m.movieId": mid} for mid in matched_ids
+        ]
+        return filtered_list
+
+    # movie_list 내 ID 추출
+    movie_ids = [m["m.movieId"] for m in movie_list]
 
     # I 순서대로 movie_ids 필터링
     matched_ids = [index + 1 for index in I[0] if (index + 1) in movie_ids]
 
     # movie_ids의 순서를 matched_ids 순서로 정렬
-    sorted_list = sorted(movie_list, key=lambda m: matched_ids.index(m["m.movieId"]) 
-                         if m["m.movieId"] in matched_ids else float('inf'))
+    sorted_list = sorted(
+        movie_list,
+        key=lambda m: matched_ids.index(m["m.movieId"])
+        if m["m.movieId"] in matched_ids else float('inf')
+    )
 
     # 상위 semantic_top_k만 선택
     filtered_list = sorted_list[:semantic_top_k]
 
     return filtered_list
+
 
 def find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx, query,
                            top_k=5, alpha=0.7, beta=0.3):
@@ -402,8 +416,8 @@ def find_movies_with_faiss(preferences, assets, graph, chains, global_graph_nx, 
     """
     # Step 1. Retrieve candidates by preferences
     retrieved_list = retrieve_movies_by_preference(preferences, assets, graph, chains)
-    if not retrieved_list:
-        return []
+    #if not retrieved_list:
+    #    return []
 
     # Step 2. Semantic filtering
     movie_list = semantic_filter_movies(retrieved_list, query, assets)
