@@ -17,7 +17,7 @@
   - TMDb API 연동으로 배우/감독 메타데이터 수집
   - 1980년 이후부터 2024년 까지의 영화 대상
   - 배우·감독 정보가 존재하는 영화 중 **평점 수 기준 상위 3,000편**을 선별
-  - User rating은 약 **30만 개(200K)** 샘플
+  - User rating은 약 **30만 개(300K)** 샘플
   - 데이터 정제
   - 🔗 [Download Processed Dataset (Google Drive)](https://drive.google.com/file/d/1PYOmmc4wWMleNUx6AeVUnLVl_CU4QgUw/view?usp=sharing)
 
@@ -28,7 +28,7 @@
 
 - **GNN 모델 임베딩 학습 및 FAISS 벡터 db 구축**
   - Neo4j Aura의 지식 그래프를 PyTorch Geometric (PyG) 객체로 변환  
-  - HeteroConv(GATConv) 기반의 Heterogeneous Graph Attention Network (HGAT) 구조로 노드 임베딩 학습
+  - HeteroConv, GATConv기반으로 이종 노드 임베딩 학습
   - FAISS에 노드 임베딩 저장 (유사도 검색)  
 
 ---
@@ -36,13 +36,13 @@
 ### **Phase 2: LLM 통합 & RAG**
 - 챗봇 서비스를 위한 LLM Agent 구현
 - **LLM main Chains**
-  - Hybrid Router → 사용자의 입력을 `fact(사실 기반 답변)`, `personalized(개인 추천 답변)`, `chit_chat (잡담)` 중 하나로 분류    
+  - Hybrid Router → 사용자의 입력을 `fact(사실 기반 답변)`, `recommendation(추천 답변)`, `chit_chat (잡담)` 중 하나로 분류    
   - Cypher Generator → Neo4j에 실행할 Cypher 쿼리 생성  
-  - **Personalized Response** → GNN 임베딩 기반 후보 영화 + 영화 평점을 결합해 자연스러운 추천 문장 생성  
+  - **recommendation Response** → GNN 임베딩 기반 후보 영화 + 영화 평점을 결합해 자연스러운 추천 문장 생성  
   - Fact-based Response → Cypher 쿼리 결과를 사람이 읽기 쉬운 문장으로 답변  
   - Chit-chat Response → 가벼운 대화, 인사말, off-topic 메시지 대응  
 
-- **personalized(개인 추천 답변) 로직**
+- **recommendation(추천 답변) 로직**
   ![System Overview](./images/personalized_recommendation_01.png)
   ![System Overview](./images/personalized_recommendation_02.png)
   - **Cypher 수행**  
@@ -53,8 +53,8 @@
     - Neo4j에서 가지고 온 후보 영화들 간의 shortest path를 기반으로 Recommendation subgraph 생성  
     
   - **GAT Attention 기반 추천 점수 생성**  
-    - Subgraph 내 모든 노드에 대해 attention score를 산출 
-    - Attention score와 품질 기반 점수를 결합해 최종 추천 점수를 계산:  
+    - Subgraph 내 모든 노드에 대해 GAT attention score를 산출 
+    - Attention score와 영화 평점 기반 점수를 결합해 최종 추천 점수를 계산:  
       - `final_score = α * attention_score + β * quality_score`  
       - `attention_score`: GAT 모델에서 학습된 중요도  
       - `quality_score`: 평균 평점과 평점 수를 정규화 후 합산  
