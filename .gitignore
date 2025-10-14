@@ -19,3 +19,6 @@ guide/
 .cache/
 # virtual env
 syenv/
+
+# logs
+logs/
