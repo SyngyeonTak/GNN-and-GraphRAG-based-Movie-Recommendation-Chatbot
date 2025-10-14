@@ -34,7 +34,7 @@
 ---
 
 ### **Phase 2: LLM 통합 & RAG**
-- 챗봇 서비스를 위한 LLM Agent 구현
+- 챗봇 서비스를 위한 LLM Agent (gpt-4o-mini) 도입
 - **LLM main Chains**
   - Hybrid Router → 사용자의 입력을 `fact(사실 기반 답변)`, `recommendation(추천 답변)`, `chit_chat (잡담)` 중 하나로 분류    
   - Cypher Generator → Neo4j에 실행할 Cypher 쿼리 생성  
@@ -50,7 +50,7 @@
     - 정제된 키워드를 기반으로 Cypher 쿼리 생성 → Neo4j에서 후보 영화 추출  
 
   - **추천 영화 확장**  
-    - Neo4j에서 가지고 온 후보 영화들 간의 shortest path를 기반으로 Recommendation subgraph 생성  
+    - Neo4j에서 추출한 후보 영화들 간의 shortest path를 기반으로 Recommendation subgraph 생성  
     
   - **GAT Attention 기반 추천 점수 생성**  
     - Subgraph 내 모든 노드에 대해 GAT attention score를 산출 
@@ -67,10 +67,12 @@
 - **UI (Gradio)**
   - Gradio 기반 챗봇 UI 구현
 
-- **클라우드 배포**
-  - AWS 웹 서버 환경 구축
+- **배포**
+  - AWS EC2(t3.small) 환경에 웹 서버 구축
   - 백엔드 검색 로직(Faiss, Neo4j Aura) 연동
-  - FastAPI를 활용한 웹 추천시스템 서비스화
+  - Docker 컨테이너로 서비스 패키징 및 배포
+  - FastAPI 기반 웹 추천 시스템 서비스화
+  -  **[👉 demo 체험하기 (FastAPI 웹 앱)](http://3.25.115.136:8000/chat/)**  
 ---
 
 ## 🛠️ 기술 스택
@@ -78,9 +80,9 @@
 - **GNN**: PyTorch Geometric (HGAT 기반)  
 - **벡터 검색**: FAISS (임베딩 유사도 검색)  
 - **LLM**: OpenAI GPT (라우팅, Cypher 생성, 개인화 답변)  
-- **프레임워크**: LangChain / 커스텀 체인  
+- **프레임워크**: LangChain
 - **UI**: Gradio
-- **배포**: AWS (클라우드 서버),  FastAPI
+- **배포**: AWS (클라우드 서버),  FastAPI, Docker
 
 ---
 ## 📂 프로젝트 구조
@@ -90,7 +92,6 @@ src/
 ├── gnn/                                # GNN 관련 모듈
 │   ├── build_knowledge_graph_aura.py   # Neo4j 기반 지식 그래프 구축
 │   ├── export_for_gnn.py               # Neo4j 데이터를 GNN 학습용 포맷으로 변환
-│   ├── faiss_mapping.py                # 노드 임베딩 → FAISS 인덱스 매핑
 │   ├── neo4j_utils.py                  # Neo4j 연동 유틸리티
 │   └── train_gnn.py                    # GNN 학습 및 임베딩 생성
 │
@@ -101,29 +102,33 @@ src/
 ├── rag_pipeline/                       # RAG 파이프라인 (챗봇 백엔드)
 │   ├── app.py                          # Gradio 앱 실행 진입점
 │   ├── chains.py                       # LangChain 체인 정의
+│   ├── retriever.py                    # Hybrid retriever (fact / personalized / chit-chat)
 │   ├── gnn_encoder.py                  # GNN 인코더
 │   ├── graph_utils.py                  # 그래프 유틸 (NetworkX, Neo4j 헬퍼)
-│   ├── main.py                         # 실행 스크립트
-│   ├── retriever.py                    # Hybrid retriever (fact / personalized / chit-chat)
-│   └── utils.py                        # 퍼지 매칭, Cypher 정제 등 유틸 함수
+│   └── utils.py                        # Cypher 정제 등 유틸 함수
 │
 └── txt_emb/                            # 텍스트 임베딩 관련
-    └── text_emb.py                     # 텍스트 임베딩 추출
+    └── text_emb.py                     # 노드 이름 임베딩 추출
+    └── overview_emb.py                 # 영화 노드 overview 임베딩 추출
 ```
 
 ## 💡 주요 기여
 - **이종 그래프 GNN 임베딩**과 **GraphRAG**를 결합한 하이브리드 영화 추천 구현  
-- **router + retreiver 구조**로 fact/personalized/chit-chat 쿼리 분리 처리  
+- **router + retreiver 구조**로 fact/recommendation/chit-chat 쿼리 분리 처리  
 
 ## 📖참고 문헌
-- Wang, X., Ji, H., Shi, C., Wang, B., Ye, Y., Cui, P., & Yu, P. S. (2019).  
-  [Heterogeneous Graph Attention Network](https://dl.acm.org/doi/10.1145/3308558.3313562). *The World Wide Web Conference (WWW)*, 2022–2032.  
+- Han, H., Wang, Y., Shomer, H., Guo, K., Ding, J., Lei, Y., ... & Tang, J. (2024).  
+  [Retrieval-Augmented Generation with Graphs (GraphRAG)](https://arxiv.org/abs/2501.00309). *arXiv preprint arXiv:2501.00309*.
 
 - Hu, Z., Dong, Y., Wang, K., & Sun, Y. (2022).  
   [Heterogeneous Graph Transformer](https://dl.acm.org/doi/abs/10.1145/3366423.3380027). *In Proceedings of the web conference 2020 (pp. 2704-2710).
 
-- Han, H., Wang, Y., Shomer, H., Guo, K., Ding, J., Lei, Y., ... & Tang, J. (2024).  
-  [Retrieval-Augmented Generation with Graphs (GraphRAG)](https://arxiv.org/abs/2501.00309). *arXiv preprint arXiv:2501.00309*.
+- Wang, X., Ji, H., Shi, C., Wang, B., Ye, Y., Cui, P., & Yu, P. S. (2019).  
+  [Heterogeneous Graph Attention Network](https://dl.acm.org/doi/10.1145/3308558.3313562). *The World Wide Web Conference (WWW)*, 2022–2032.  
+
+
+
+
 
 
 ---
