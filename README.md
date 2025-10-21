@@ -1,4 +1,4 @@
-# 🎬 GraphRAG 기반 영화 추천 챗봇
+# 🎬 LLM Agent 영화 추천 챗봇
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Neo4j](https://img.shields.io/badge/Neo4j-4581C3?style=for-the-badge&logo=neo4j&logoColor=white)
 ![FAISS](https://img.shields.io/badge/FAISS-009688?style=for-the-badge&logo=meta&logoColor=white)
