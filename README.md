@@ -72,7 +72,7 @@
   - 백엔드 검색 로직(Faiss, Neo4j Aura) 연동
   - Docker 컨테이너로 서비스 패키징 및 배포
   - FastAPI 기반 웹 추천 시스템 서비스화
-  -  **[👉 demo 체험하기 (FastAPI 웹 앱)](http://3.24.87.84:8000/chat/)**  
+  -  **[👉 demo 체험하기 (FastAPI 웹 앱)](http://34.64.234.50:80/chat/)**  
 ---
 
 ## 🛠️ 기술 스택
