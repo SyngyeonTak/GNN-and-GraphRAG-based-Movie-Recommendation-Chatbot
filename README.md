@@ -70,7 +70,7 @@
 - **배포**
   - AWS EC2(t3.small) 환경에 웹 서버 구축
   - 백엔드 검색 로직(Faiss, Neo4j Aura) 연동
-  - Docker 컨테이너로 서비스 패키징 및 배포
+  - Docker 컨테이너로 서비스 패키징 및 배포 **[Docker Hub](https://hub.docker.com/repository/docker/syngyeontak/movie-chatbot/general)**  
   - FastAPI 기반 웹 추천 시스템 서비스화
   -  **[👉 demo 체험하기 (FastAPI 웹 앱)](http://34.64.234.50:80/chat/)**  
 ---
